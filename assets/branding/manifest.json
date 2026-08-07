@@ -1,0 +1,38 @@
+{
+  "brand": "MicrosoftX",
+  "selectedDirection": "split-document-x",
+  "generatedAt": "2026-08-08",
+  "generator": "Codex built-in ImageGen",
+  "assets": [
+    {
+      "path": "microsoftx-logo.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "4c09362e69bba46f544ce0caf1de4963a7048218ba5fb609bbab024e4a993351"
+    },
+    {
+      "path": "microsoftx-icon-512.png",
+      "width": 512,
+      "height": 512,
+      "sha256": "7e8897ee398761eb636e52f0571139d98f653d4220d669e8ea37eda6c3b1576c"
+    },
+    {
+      "path": "microsoftx-icon-192.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "c3bbfbf36af886226cdeea6e81dc5a6d44069ca37db5162b6627d860935568df"
+    },
+    {
+      "path": "microsoftx-icon-64.png",
+      "width": 64,
+      "height": 64,
+      "sha256": "d1a53d67dc08e9427f731e5f2e48a684d2e0b3d17c96c98ceb5c8863bf4c7258"
+    },
+    {
+      "path": "favicon-32.png",
+      "width": 32,
+      "height": 32,
+      "sha256": "0faabcf9f071b288841e535fe79941137055ce3ab87f52da074f241c760e756a"
+    }
+  ]
+}

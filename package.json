@@ -1,0 +1,23 @@
+{
+  "name": "microsoftx",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A client-side Microsoft Learn documentation diff viewer",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "npm run build && node --test",
+    "preview": "node scripts/serve.js"
+  },
+  "dependencies": {
+    "diff": "^5.2.0",
+    "marked": "^11.2.0",
+    "node-htmldiff": "^0.9.4"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
