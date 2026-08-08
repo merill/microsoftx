@@ -41,9 +41,11 @@ function escapeHtml(value) {
 }
 
 const icons = {
-  sunMoon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>',
+  darkMode: fs.readFileSync(path.join(rootDir, 'assets/icons/nucleo-dark-mode.svg'), 'utf8')
+    .replace('<svg xmlns="http://www.w3.org/2000/svg"', '<svg class="nucleo-header-icon nucleo-dark-mode-icon" aria-hidden="true" focusable="false"'),
   menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>',
-  gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"></path></svg>',
+  settings: fs.readFileSync(path.join(rootDir, 'assets/icons/nucleo-gear-keyhole.svg'), 'utf8')
+    .replace('<svg xmlns="http://www.w3.org/2000/svg"', '<svg class="nucleo-header-icon nucleo-gear-keyhole-icon" aria-hidden="true" focusable="false"'),
   github: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"></path></svg>',
   youtube: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"></path></svg>',
   linkedin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.124 2.062 2.062 0 0 1 0 4.124zM7.119 20.452H3.555V9H7.12v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0z"></path></svg>',
@@ -86,9 +88,11 @@ function header(current) {
     <div class="header-inner">
       <a class="brand" href="/" aria-label="Microsoft Docs X-Ray home"><img class="brand-logo" src="/assets/branding/microsoftx-icon-64.png" alt=""><span>Microsoft Docs X-Ray</span><small>See what changed</small></a>
       ${navigation(current)}
-      <button class="header-action menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-label="Open navigation">${icons.menu}</button>
-      <button class="header-action" type="button" data-theme-toggle aria-label="Change color theme">${icons.sunMoon}</button>
-      ${current === 'home' ? `<button class="header-action" type="button" data-github-token-open aria-haspopup="dialog" aria-controls="github-token-drawer" aria-expanded="false" aria-label="Configure GitHub API settings" title="GitHub API settings">${icons.gear}</button>` : ''}
+      <div class="header-controls">
+        <button class="header-action menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-label="Open navigation">${icons.menu}</button>
+        <button class="header-action" type="button" data-theme-toggle aria-label="Change color theme" title="Change color theme">${icons.darkMode}</button>
+        ${current === 'home' ? `<button class="header-action" type="button" data-github-token-open aria-haspopup="dialog" aria-controls="github-token-drawer" aria-expanded="false" aria-label="Configure GitHub API settings" title="GitHub API settings">${icons.settings}</button>` : ''}
+      </div>
     </div>
   </header>`;
 }
@@ -124,7 +128,7 @@ function githubTokenDrawer() {
       <div class="token-field-label"><label for="github-api-token">Fine-grained GitHub token</label><span>Optional</span></div>
       <input id="github-api-token" data-github-token-input type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
       <details class="token-drawer-help"><summary><span>How to create the low-privilege token</span><svg class="token-help-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="token-drawer-help-body"><ol><li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub’s fine-grained token form ↗</a>.</li><li>Choose a short expiration and your personal account as the resource owner.</li><li>Under <strong>Repository access</strong>, select <strong>Public Repositories (read-only)</strong>. Do not select any private repositories.</li><li>Do not grant additional repository or account permissions. Docs X-Ray needs no write permissions.</li><li>Generate the token, then paste and save it here.</li></ol><p class="token-drawer-warning">GitHub associates authenticated requests with your account to apply the higher rate limit. The token is saved only in this browser for the current site domain and sent only to <code>api.github.com</code>.</p></div></details>
-      <div class="token-drawer-actions"><button class="token-save" type="button" data-github-token-save>Save token</button><button class="token-forget" type="button" data-github-token-forget>Remove token</button></div>
+      <div class="token-drawer-actions"><button class="button-primary" type="button" data-github-token-save>Save</button><button class="button-secondary" type="button" data-github-token-forget>Remove token</button></div>
       <p class="token-drawer-status" data-github-token-status role="status" aria-live="polite"></p>
     </section>
     <p class="token-drawer-intro">Microsoft Docs X-Ray reads public documentation revisions directly from GitHub. GitHub provides anonymous access to public data, so most people can start without any setup.</p>
@@ -200,20 +204,54 @@ function contentPage({ current, title, lede, sections, aside = '' }) {
 
 function diffApplication() {
   return `<main class="diff-page" data-diff-page hidden>
-    <section class="diff-hero">
-      <div><span class="eyebrow">X-ray vision for Microsoft Learn</span><h1>See what changed.</h1><p>Explore the page’s version timeline, compare any point in time with today, or select any two versions.</p></div>
+    <section class="diff-hero" aria-label="Documentation comparison controls">
+      <div class="diff-hero-copy"><span class="eyebrow">Microsoft Learn page diff</span><h1>See what changed</h1><p>Inspect the latest edit or compare any two published versions.</p></div>
       <form class="compare-form" data-diff-form>
         <label for="learn-url">Microsoft Learn article URL</label>
-        <div class="url-form"><input id="learn-url" name="learn-url" type="url" inputmode="url" autocomplete="url" required placeholder="https://learn.microsoft.com/en-us/entra/…"><button class="button-primary" type="submit">Load version history</button></div>
+        <div class="url-form"><input id="learn-url" name="learn-url" type="url" inputmode="url" autocomplete="url" required placeholder="https://learn.microsoft.com/en-us/entra/…"><button class="button-primary" type="submit">Load diff</button></div>
         <div class="compare-status" data-compare-status role="status" aria-live="polite" hidden></div>
       </form>
     </section>
+    <section class="diff-loading" data-diff-loading data-loading-state="mapping" aria-labelledby="diff-loading-title" hidden>
+      <div class="diff-loading-art" aria-hidden="true">
+        <div class="bot-workbench">
+          <span class="bot-document bot-document-before"><i></i><i></i><i></i></span>
+          <svg class="docs-bot" viewBox="0 0 220 180" focusable="false">
+            <path class="bot-antenna" d="M110 34V18m0 0 14-9m-14 9-14-9"/>
+            <rect class="bot-head" x="54" y="35" width="112" height="88" rx="24"/>
+            <path class="bot-screen" d="M75 58h70v42H75z"/>
+            <circle class="bot-eye bot-eye-left" cx="94" cy="79" r="6"/>
+            <circle class="bot-eye bot-eye-right" cx="126" cy="79" r="6"/>
+            <path class="bot-smile" d="M97 93c8 7 18 7 26 0"/>
+            <path class="bot-arm bot-arm-left" d="M56 87 31 104l-14-7"/>
+            <path class="bot-arm bot-arm-right" d="m164 87 25 17 14-7"/>
+            <path class="bot-base" d="M82 123v18m56-18v18M69 142h82"/>
+          </svg>
+          <span class="bot-document bot-document-after"><i></i><i></i><i></i></span>
+          <span class="bot-packet bot-packet-one">−</span><span class="bot-packet bot-packet-two">+</span>
+          <span class="bot-scan"></span>
+        </div>
+      </div>
+      <div class="diff-loading-content">
+        <span class="eyebrow">GitHub comparison in progress</span>
+        <h2 id="diff-loading-title" data-loading-title>Docs bots are finding the source.</h2>
+        <p data-loading-message>Matching this Microsoft Learn address to its public documentation repository.</p>
+        <div class="diff-loading-progress" data-loading-progress role="progressbar" aria-label="Comparison progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12" aria-valuetext="Mapping the documentation page"><span></span></div>
+        <ol class="diff-loading-steps" aria-label="Comparison steps">
+          <li data-loading-phase="mapping"><span></span>Map page</li>
+          <li data-loading-phase="history"><span></span>Read history</li>
+          <li data-loading-phase="revisions"><span></span>Fetch versions</li>
+          <li data-loading-phase="rendering"><span></span>Build diff</li>
+        </ol>
+        <p class="diff-loading-note">Everything happens in this browser. Larger pages and shared GitHub rate limits can take a little longer.</p>
+      </div>
+    </section>
     <aside class="diff-intro" data-diff-intro><strong>Supported Microsoft Learn areas</strong><p>Entra, Azure, Microsoft Graph, .NET, PowerShell, Microsoft 365, Intune, Fabric, Dynamics 365, SQL, Visual Studio, ASP.NET Core, and Windows Server.</p><a href="/supported/">View mappings and limitations</a></aside>
     <article data-compare-results hidden>
-      <header class="result-head"><div><span class="eyebrow" data-result-source>Documentation source</span><h2 data-result-title></h2><code class="result-path" data-result-path></code></div><nav class="source-links" aria-label="Source links"><a data-result-learn target="_blank" rel="noopener noreferrer">Microsoft Learn ↗</a><a data-result-github target="_blank" rel="noopener noreferrer">GitHub source ↗</a><a data-result-history target="_blank" rel="noopener noreferrer">File history ↗</a></nav></header>
+      <header class="result-head"><span class="eyebrow" data-result-source>Documentation source</span><h2 data-result-title></h2><nav class="source-links" aria-label="Open documentation sources"><a data-result-learn target="_blank" rel="noopener noreferrer" aria-label="Open on Microsoft Learn" title="Open on Microsoft Learn"><img class="microsoft-source-icon" src="/assets/icons/microsoft.svg" width="16" height="16" alt=""><span>Microsoft Learn</span></a><a data-result-github target="_blank" rel="noopener noreferrer" aria-label="Open the source on GitHub" title="Open the source on GitHub"><img src="/assets/icons/github.svg" width="16" height="16" alt=""><span>GitHub</span></a></nav></header>
       <div class="diff-workspace"><section class="diff-content" data-diff-content><header class="diff-heading"><div><span class="eyebrow">Browser-generated comparison</span><h2>What changed</h2></div><p data-result-stats></p></header><div class="diff-tabs" role="tablist"><button class="active" type="button" role="tab" aria-selected="true" data-diff-tab="visual">Visual diff</button><button type="button" role="tab" aria-selected="false" data-diff-tab="markdown">Markdown diff</button></div><div class="diff-panel" role="tabpanel" data-diff-panel="visual" data-visual-diff></div><div class="diff-panel" role="tabpanel" data-diff-panel="markdown" data-markdown-diff hidden></div></section><aside class="version-sidebar" aria-label="Version history and comparison controls" data-version-explorer></aside></div>
     </article>
-    <nav class="diff-navigator" data-diff-navigator aria-label="Navigate documentation changes" hidden><button type="button" data-diff-previous title="Previous diff" aria-label="Previous diff">← Previous diff</button><span class="diff-navigator-label" data-diff-position aria-live="polite">Changes</span><button type="button" data-diff-next title="Next diff" aria-label="Next diff">Next diff →</button></nav>
+    <nav class="diff-navigator" data-diff-navigator aria-label="Navigate documentation changes" hidden><button type="button" data-diff-previous title="Previous diff" aria-label="Previous diff"><span aria-hidden="true">←</span><span class="diff-navigator-text">Previous diff</span></button><span class="diff-navigator-label" data-diff-position aria-live="polite">Changes</span><button type="button" data-diff-next title="Next diff" aria-label="Next diff"><span class="diff-navigator-text">Next diff</span><span aria-hidden="true">→</span></button></nav>
   </main>`;
 }
 
@@ -356,7 +394,11 @@ function thirdPartyLicenses() {
     ['diff', 'LICENSE'],
     ['node-htmldiff', 'LICENSE']
   ];
-  return packages.map(([name, license]) => `${name}\n${'='.repeat(name.length)}\n${fs.readFileSync(path.join(rootDir, 'node_modules', name, license), 'utf8').trim()}\n`).join('\n');
+  const packageLicenses = packages.map(([name, license]) => `${name}\n${'='.repeat(name.length)}\n${fs.readFileSync(path.join(rootDir, 'node_modules', name, license), 'utf8').trim()}\n`);
+  const iconLicenses = [
+    ['GitHub Octicons', 'OCTICONS-LICENSE.txt']
+  ].map(([name, license]) => `${name}\n${'='.repeat(name.length)}\n${fs.readFileSync(path.join(rootDir, 'assets', 'icons', license), 'utf8').trim()}\n`);
+  return [...packageLicenses, ...iconLicenses].join('\n');
 }
 
 function build() {
@@ -380,6 +422,8 @@ function build() {
   copy(path.join(rootDir, 'assets/branding/microsoftx-og.png'), 'assets/branding/microsoftx-og.png');
   copy(path.join(rootDir, 'assets/branding/merill-profile.jpeg'), 'assets/branding/merill-profile.jpeg');
   copy(path.join(rootDir, 'assets/branding/maester-cloud-drift.png'), 'assets/branding/maester-cloud-drift.png');
+  copy(path.join(rootDir, 'assets/icons/microsoft.svg'), 'assets/icons/microsoft.svg');
+  copy(path.join(rootDir, 'assets/icons/github.svg'), 'assets/icons/github.svg');
   copy(path.join(rootDir, 'node_modules/marked/lib/marked.umd.js'), 'assets/vendor/marked.js');
   copy(path.join(rootDir, 'node_modules/diff/dist/diff.min.js'), 'assets/vendor/diff.min.js');
   copy(path.join(rootDir, 'node_modules/node-htmldiff/js/htmldiff.js'), 'assets/vendor/htmldiff.js');

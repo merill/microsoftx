@@ -1,0 +1,29 @@
+{
+  "projectPath": "/Users/merill/github/microsoftx",
+  "decisions": [
+    {
+      "key": "ui:dark-mode:svg",
+      "iconId": "local:10204",
+      "iconName": "dark-mode",
+      "outputPath": "/Users/merill/github/microsoftx/assets/icons/nucleo-dark-mode.svg",
+      "format": "svg",
+      "customization": {
+        "decorative": false
+      },
+      "rationale": "Installed through nucleo-icons CLI",
+      "createdAt": "2026-08-08T03:21:07.487Z"
+    },
+    {
+      "key": "ui:gear-keyhole:svg",
+      "iconId": "local:9904",
+      "iconName": "gear-keyhole",
+      "outputPath": "/Users/merill/github/microsoftx/assets/icons/nucleo-gear-keyhole.svg",
+      "format": "svg",
+      "customization": {
+        "decorative": false
+      },
+      "rationale": "Installed through nucleo-icons CLI",
+      "createdAt": "2026-08-08T03:21:07.205Z"
+    }
+  ]
+}

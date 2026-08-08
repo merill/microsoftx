@@ -7,7 +7,14 @@
 
   const TOKEN_STORAGE_KEY = 'microsoftx-github-token';
   const HISTORY_PAGE_SIZE = 100;
+  const MINIMUM_LOADING_DURATION = 2000;
   const VIEW_NAMES = new Set(['visual', 'markdown']);
+  const LOADING_PHASES = Object.freeze({
+    mapping: { progress: 12, title: 'Docs bots are finding the source.', message: 'Matching this Microsoft Learn address to its public documentation repository.', aria: 'Mapping the documentation page' },
+    history: { progress: 38, title: 'Reading the page’s GitHub history.', message: 'Finding the commits that changed this documentation file.', aria: 'Reading the GitHub file history' },
+    revisions: { progress: 72, title: 'Fetching both document versions.', message: 'Loading the before and after Markdown directly from GitHub.', aria: 'Fetching both documentation versions' },
+    rendering: { progress: 94, title: 'Building your X-ray view.', message: 'Sanitizing the Markdown and calculating the visual and source diffs in this browser.', aria: 'Rendering the page comparison' }
+  });
   const ROOT_PATHS = new Set(['/', '/index.html']);
   const LANDING_PATHS = new Set(['/', '/index.html', '/about', '/about/', '/supported', '/supported/', '/privacy', '/privacy/']);
   let nodeConfig = null;
@@ -46,7 +53,7 @@
   }
 
   function isLocalHostname(hostname) {
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+    return hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1' || hostname === '[::1]';
   }
 
   function isAllowedSiteOrigin(url) {
@@ -119,6 +126,31 @@
   }
 
   const shortcutUrlForLearnUrl = diffUrlForLearnUrl;
+
+  function prepareShortcutLanding(document, locationLike) {
+    let pageUrl;
+    try { pageUrl = new URL(locationLike); } catch { return false; }
+    if (!ROOT_PATHS.has(pageUrl.pathname) || pageUrl.hostname.toLowerCase().split('.')[0] !== 'learn') return false;
+
+    const marketing = document.querySelector('[data-marketing-root]');
+    const hero = marketing?.querySelector('.hero');
+    const trySection = marketing?.querySelector('#try-it');
+    if (!hero || !trySection) return false;
+
+    document.body.classList.add('shortcut-landing');
+    trySection.dataset.shortcutLanding = '';
+    hero.insertAdjacentElement('afterend', trySection);
+
+    const eyebrow = trySection.querySelector('.eyebrow');
+    const heading = trySection.querySelector('h2');
+    const introduction = trySection.querySelector('.section-heading p');
+    const help = trySection.querySelector('.form-help');
+    if (eyebrow) eyebrow.textContent = 'Start a page diff';
+    if (heading) heading.textContent = 'Paste the Microsoft Learn page you want to compare.';
+    if (introduction) introduction.textContent = 'The shortcut needs the article path from the original Learn URL. Paste the full address below, or add x after microsoft in that article’s address.';
+    if (help) help.textContent = `Example: ${pageUrl.host}/en-us/entra/identity/…`;
+    return true;
+  }
 
   function decodePathSegment(segment) {
     let decoded;
@@ -324,13 +356,18 @@
     const oldHtml = renderMarkdown(before, info, headRef);
     const newHtml = renderMarkdown(after, info, headRef);
     const html = root.htmldiff(oldHtml, newHtml);
-    return html.trim() ? `<div class="rich-diff">${html}</div>` : '<p class="quiet">No rendered content changed.</p>';
+    const isNewFile = !String(before || '').trim() && Boolean(String(after || '').trim());
+    const notice = isNewFile
+      ? '<aside class="new-file-notice" role="note"><span class="new-file-badge">New page</span><div><strong>This page did not exist before this revision.</strong><p>The full page is shown below as added content.</p></div></aside>'
+      : '';
+    return html.trim() ? `${notice}<div class="rich-diff">${html}</div>` : '<p class="quiet">No rendered content changed.</p>';
   }
 
   function renderMarkdownDiff(before, after, info, baseRef, headRef) {
     if (!root.Diff?.createTwoFilesPatch) throw new Error('The Markdown diff engine did not load.');
+    const isNewFile = !String(before || '').trim() && Boolean(String(after || '').trim());
     const patch = root.Diff.createTwoFilesPatch(
-      `${info.path} @ ${(baseRef || 'new file').slice(0, 7)}`,
+      `${info.path} @ ${isNewFile ? 'new file' : String(baseRef || 'unknown').slice(0, 7)}`,
       `${info.path} @ ${headRef.slice(0, 7)}`,
       before,
       after,
@@ -348,7 +385,10 @@
       else if (line.startsWith('-')) kind = 'removed';
       return `<span class="markdown-diff-line ${kind}">${escapeHtml(line || ' ')}</span>`;
     }).join('');
-    return `<div class="markdown-diff" role="region" aria-label="Markdown Git diff"><pre><code>${lines}</code></pre></div>`;
+    const notice = isNewFile
+      ? '<aside class="new-file-notice" role="note"><span class="new-file-badge">New page</span><div><strong>This page did not exist before this revision.</strong><p>The full file is shown below as added content.</p></div></aside>'
+      : '';
+    return `${notice}<div class="markdown-diff" role="region" aria-label="Markdown Git diff"><pre><code>${lines}</code></pre></div>`;
   }
 
   async function request(endpoint, token, accept) {
@@ -444,6 +484,45 @@
     element.textContent = message || '';
   }
 
+  function setLoadingSurface(diffPage, phase, active = true) {
+    const loading = diffPage?.querySelector('[data-diff-loading]');
+    if (!loading) return;
+    if (!active) {
+      loading.hidden = true;
+      diffPage.classList.remove('is-loading');
+      diffPage.removeAttribute('data-loading-state');
+      return;
+    }
+
+    const selected = LOADING_PHASES[phase] || LOADING_PHASES.mapping;
+    const phaseNames = Object.keys(LOADING_PHASES);
+    const selectedIndex = phaseNames.indexOf(phase in LOADING_PHASES ? phase : 'mapping');
+    diffPage.classList.add('is-loading');
+    diffPage.dataset.loadingState = phaseNames[selectedIndex];
+    loading.hidden = false;
+    loading.querySelector('[data-loading-title]').textContent = selected.title;
+    loading.querySelector('[data-loading-message]').textContent = selected.message;
+    const progress = loading.querySelector('[data-loading-progress]');
+    progress.setAttribute('aria-valuenow', String(selected.progress));
+    progress.setAttribute('aria-valuetext', selected.aria);
+    loading.querySelectorAll('[data-loading-phase]').forEach((item, index) => {
+      item.classList.toggle('is-complete', index < selectedIndex);
+      item.classList.toggle('is-active', index === selectedIndex);
+    });
+  }
+
+  function remainingLoadingDuration(startedAt, now = Date.now(), minimumDuration = MINIMUM_LOADING_DURATION) {
+    const elapsed = Math.max(0, Number(now) - Number(startedAt));
+    return Math.max(0, Number(minimumDuration) - elapsed);
+  }
+
+  function waitForMinimumLoading(startedAt) {
+    const remaining = remainingLoadingDuration(startedAt);
+    return remaining > 0
+      ? new Promise(resolve => root.setTimeout(resolve, remaining))
+      : Promise.resolve();
+  }
+
   function commitDate(commit) {
     return commit?.commit?.author?.date || commit?.commit?.committer?.date || '';
   }
@@ -480,7 +559,7 @@
       const action = index === 0 ? 'Show latest change' : 'Compare from here to current';
       return `<li class="version-event${selected ? ' selected' : ''}${index === 0 ? ' current' : ''}"><span class="version-node" aria-hidden="true"></span><button type="button" data-history-from="${escapeHtml(commit.sha)}" aria-pressed="${selected}"><span class="version-date">${escapeHtml(index === 0 ? 'Current version' : formatDate(date))}${role ? `<em>${role}</em>` : ''}</span><strong>${escapeHtml(firstLine(commit.commit?.message) || 'Documentation update')}</strong><small>${action}</small></button></li>`;
     }).join('');
-    return `<section class="version-explorer" aria-labelledby="version-history-heading"><header><div><span class="eyebrow">Version history</span><h2 id="version-history-heading">Choose a point in time</h2><p>Select any change to compare that version with the current page.</p></div><button class="share-view-button" type="button" data-share-view>Copy link to this view</button></header><div class="version-layout"><div><ol class="version-timeline" data-version-timeline>${timeline}</ol>${hasMore ? '<button class="load-history-button" type="button" data-load-older>Load older versions</button>' : ''}</div><aside class="comparison-controls"><span class="eyebrow">Current comparison</span><div class="comparison-range" data-comparison-summary>${comparisonSummary(comparison)}</div><button class="latest-change-button" type="button" data-compare-latest>Show latest change</button><details><summary>Advanced: compare any two versions</summary><div class="advanced-comparison"><label>Earlier version<select data-comparison-base>${options}</select></label><label>Later version<select data-comparison-head>${options}</select></label><button class="button-primary" type="button" data-compare-selected>Compare selected versions</button><p data-comparison-error role="status"></p></div></details><p class="share-view-status" data-share-status role="status" aria-live="polite"></p></aside></div></section>`;
+    return `<section class="version-explorer" aria-labelledby="version-history-heading"><header><div><span class="eyebrow">Version history</span><h2 id="version-history-heading">Choose a point in time</h2><p>Select any change to compare that version with the current page.</p></div><button class="share-view-button" type="button" data-share-view aria-label="Copy link to this view" title="Copy link to this view"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 15 5c0 .18.02.36.05.53L8.91 9.06A3 3 0 0 0 7 8.35a3 3 0 1 0 1.91 5.59l6.14 3.53A3 3 0 0 0 15 18a3 3 0 1 0 .83-2.07L9.7 12.4a3.1 3.1 0 0 0 0-.8l6.13-3.53A3 3 0 0 0 18 8Z"/></svg></button></header><div class="version-layout"><div><ol class="version-timeline" data-version-timeline>${timeline}</ol>${hasMore ? '<button class="load-history-button" type="button" data-load-older>Load older versions</button>' : ''}</div><aside class="comparison-controls"><span class="eyebrow">Current comparison</span><div class="comparison-range" data-comparison-summary>${comparisonSummary(comparison)}</div><button class="latest-change-button" type="button" data-compare-latest>Show latest change</button><details><summary>Advanced: compare any two versions</summary><div class="advanced-comparison"><label>Earlier version<select data-comparison-base>${options}</select></label><label>Later version<select data-comparison-head>${options}</select></label><button class="button-primary" type="button" data-compare-selected>Compare selected versions</button><p data-comparison-error role="status"></p></div></details><p class="share-view-status" data-share-status role="status" aria-live="polite"></p></aside></div></section>`;
   }
 
   function setHistorySelections(container, comparison) {
@@ -541,6 +620,55 @@
     return { select };
   }
 
+  const VISUAL_DIFF_BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,tr,pre,blockquote';
+
+  function continuousVisualDiffGroups(panel) {
+    if (!panel) return [];
+    const blocks = [...panel.querySelectorAll(VISUAL_DIFF_BLOCKS)]
+      .filter(block => !block.querySelector(VISUAL_DIFF_BLOCKS));
+    const groups = [];
+    let currentGroup = null;
+
+    blocks.forEach(block => {
+      const changed = Boolean(block.matches('ins,del') || block.closest('ins,del') || block.querySelector('ins,del'));
+      if (!changed) {
+        currentGroup = null;
+        return;
+      }
+      if (!currentGroup) {
+        currentGroup = [];
+        groups.push(currentGroup);
+      }
+      currentGroup.push(block);
+    });
+
+    if (groups.length) return groups;
+    const inlineChanges = [...panel.querySelectorAll('ins,del')];
+    return inlineChanges.length ? [[inlineChanges[0]]] : [];
+  }
+
+  function continuousMarkdownDiffGroups(panel) {
+    if (!panel) return [];
+    const hunks = [...panel.querySelectorAll('.markdown-diff-line.hunk')];
+    if (hunks.length) return hunks.map(hunk => [hunk]);
+
+    const groups = [];
+    let currentGroup = null;
+    panel.querySelectorAll('.markdown-diff-line').forEach(line => {
+      const changed = line.classList.contains('added') || line.classList.contains('removed');
+      if (!changed) {
+        currentGroup = null;
+        return;
+      }
+      if (!currentGroup) {
+        currentGroup = [];
+        groups.push(currentGroup);
+      }
+      currentGroup.push(line);
+    });
+    return groups;
+  }
+
   function createDiffNavigator(document) {
     const nav = document.querySelector('[data-diff-navigator]');
     const diffRoot = document.querySelector('[data-diff-content]');
@@ -548,12 +676,23 @@
     const label = nav.querySelector('[data-diff-position]');
     const previous = nav.querySelector('[data-diff-previous]');
     const next = nav.querySelector('[data-diff-next]');
-    let targets = [];
+    let targetGroups = [];
     let index = -1;
+    let positionFrame = null;
 
-    function positionUnderHeader() {
-      const header = document.querySelector('.site-header');
-      nav.style.top = `${Math.max(12, (header?.getBoundingClientRect().bottom || 58) + 12)}px`;
+    function positionNavigator() {
+      positionFrame = null;
+      const bannerBottom = document.querySelector('.diff-hero')?.getBoundingClientRect().bottom || 0;
+      nav.style.top = `${Math.max(12, bannerBottom + 8)}px`;
+    }
+
+    function scheduleNavigatorPosition() {
+      if (positionFrame !== null) return;
+      if (typeof root.requestAnimationFrame === 'function') {
+        positionFrame = root.requestAnimationFrame(positionNavigator);
+      } else {
+        positionNavigator();
+      }
     }
 
     function refresh() {
@@ -561,35 +700,35 @@
       index = -1;
       const panel = diffRoot.querySelector('[data-diff-panel]:not([hidden])');
       if (!panel) return hide();
-      targets = panel.dataset.diffPanel === 'markdown'
-        ? [...panel.querySelectorAll('.markdown-diff-line.hunk')]
-        : [...new Set([...panel.querySelectorAll('ins,del')].map(node => node.closest('p,li,h1,h2,h3,h4,h5,h6,tr,pre,blockquote') || node))];
-      if (!targets.length && panel.dataset.diffPanel === 'markdown') {
-        targets = [...panel.querySelectorAll('.markdown-diff-line.added,.markdown-diff-line.removed')];
-      }
-      targets.forEach(target => target.classList.add('diff-jump-target'));
-      positionUnderHeader();
-      nav.hidden = !targets.length;
-      label.textContent = `${targets.length} change${targets.length === 1 ? '' : 's'}`;
+      targetGroups = panel.dataset.diffPanel === 'markdown'
+        ? continuousMarkdownDiffGroups(panel)
+        : continuousVisualDiffGroups(panel);
+      targetGroups.flat().forEach(target => target.classList.add('diff-jump-target'));
+      nav.hidden = !targetGroups.length;
+      label.textContent = `${targetGroups.length} change${targetGroups.length === 1 ? '' : 's'}`;
+      positionNavigator();
     }
 
     function hide() {
-      targets = [];
+      targetGroups = [];
       index = -1;
       nav.hidden = true;
     }
 
     function move(amount) {
-      if (!targets.length) return;
-      index = index < 0 ? (amount > 0 ? 0 : targets.length - 1) : (index + amount + targets.length) % targets.length;
-      targets.forEach((target, targetIndex) => target.classList.toggle('diff-jump-active', targetIndex === index));
-      label.textContent = `${index + 1} of ${targets.length}`;
-      targets[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!targetGroups.length) return;
+      index = index < 0 ? (amount > 0 ? 0 : targetGroups.length - 1) : (index + amount + targetGroups.length) % targetGroups.length;
+      targetGroups.forEach((group, groupIndex) => group.forEach((target, targetIndex) => {
+        target.classList.toggle('diff-jump-active', groupIndex === index && targetIndex === 0);
+      }));
+      label.textContent = `${index + 1} of ${targetGroups.length}`;
+      targetGroups[index][0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     previous.addEventListener('click', () => move(-1));
     next.addEventListener('click', () => move(1));
-    root.addEventListener('resize', positionUnderHeader);
+    root.addEventListener('scroll', scheduleNavigatorPosition, { passive: true });
+    root.addEventListener('resize', scheduleNavigatorPosition);
     return { refresh, hide };
   }
 
@@ -614,6 +753,8 @@
         root.location.assign(shortcut);
       } catch (error) { setStatus(homeStatus, error.message, 'error'); }
     });
+
+    if (context.mode === 'landing') prepareShortcutLanding(document, root.location.href);
 
     if (context.mode === 'diff') addNoIndex(document);
     if (context.mode !== 'diff' && context.mode !== 'error') return;
@@ -674,14 +815,26 @@
           temporary.remove();
         }
         if (shareStatus) shareStatus.textContent = 'Link copied. It includes both versions and the selected view.';
-        if (button) button.textContent = 'Copied';
-        root.setTimeout(() => { if (button) button.textContent = 'Copy link to this view'; }, 1600);
+        if (button) {
+          button.dataset.copied = 'true';
+          button.setAttribute('aria-label', 'Link copied');
+          button.setAttribute('title', 'Link copied');
+        }
+        root.setTimeout(() => {
+          if (!button) return;
+          delete button.dataset.copied;
+          button.setAttribute('aria-label', 'Copy link to this view');
+          button.setAttribute('title', 'Copy link to this view');
+        }, 1600);
       } catch {
         if (shareStatus) shareStatus.textContent = 'Copy the URL from your browser address bar; it is already updated.';
       }
     }
 
     function reportApiError(error, retry) {
+      setLoadingSurface(diffPage, '', false);
+      if (currentComparison) results.hidden = false;
+      else intro.hidden = false;
       setStatus(status, error.message || 'The comparison could not be loaded.', 'error');
       if (error.rateLimited || error.status === 401) {
         retryAfterTokenChange = retry;
@@ -714,17 +867,18 @@
       const counts = countChangedLines(parts);
       const headRef = comparison.headCommit.sha;
       const baseRef = comparison.baseCommit?.sha || '';
+      const isNewFile = !String(comparison.before || '').trim() && Boolean(String(comparison.after || '').trim());
       const title = extractTitle(comparison.after, info.path.split('/').pop().replace(/\.md$/i, ''));
 
       document.title = `${title} — Microsoft Docs X-Ray`;
       setCanonical(document, info.publicUrl);
       diffPage.querySelector('[data-result-title]').textContent = title;
       diffPage.querySelector('[data-result-source]').textContent = info.sourceLabel;
-      diffPage.querySelector('[data-result-path]').textContent = info.path;
-      diffPage.querySelector('[data-result-stats]').textContent = `+${counts.additions} / −${counts.deletions} lines ${comparisonDescription(comparison, currentHistory)}`;
+      diffPage.querySelector('[data-result-stats]').textContent = isNewFile
+        ? `New page · +${counts.additions} lines added`
+        : `+${counts.additions} / −${counts.deletions} lines ${comparisonDescription(comparison, currentHistory)}`;
       diffPage.querySelector('[data-result-learn]').href = info.publicUrl;
       diffPage.querySelector('[data-result-github]').href = githubFileUrl(info, headRef);
-      diffPage.querySelector('[data-result-history]').href = info.historyUrl;
       const explorer = diffPage.querySelector('[data-version-explorer]');
       explorer.innerHTML = historyExplorer(currentHistory, comparison, historyHasMore);
       setHistorySelections(explorer, comparison);
@@ -734,6 +888,7 @@
       results.hidden = false;
       retryAfterTokenChange = null;
       setStatus(status, '', '');
+      setLoadingSurface(diffPage, '', false);
       syncViewUrl();
       tabs.select(currentView, false);
       navigator.refresh();
@@ -741,15 +896,18 @@
 
     async function compareRefs(refs) {
       if (!currentInfo) return;
+      const loadingStartedAt = Date.now();
       navigator.hide();
-      setStatus(status, 'Loading the selected versions from GitHub…', 'loading');
-      results.querySelectorAll('button,select').forEach(control => { control.disabled = true; });
+      results.hidden = true;
+      setStatus(status, '', '');
+      setLoadingSurface(diffPage, 'revisions');
       try {
         const comparison = await loadComparison(currentInfo, savedToken(), refs, currentHistory);
+        setLoadingSurface(diffPage, 'rendering');
+        await waitForMinimumLoading(loadingStartedAt);
         renderComparison(comparison);
       } catch (error) {
         reportApiError(error, () => compareRefs(refs));
-        results.querySelectorAll('button,select').forEach(control => { control.disabled = false; });
       }
     }
 
@@ -809,31 +967,38 @@
     });
 
     async function loadArticle(value, requestedRefs) {
+      const loadingStartedAt = Date.now();
       results.hidden = true;
+      intro.hidden = true;
       navigator.hide();
       submit.disabled = true;
       submit.textContent = 'Loading history…';
-      setStatus(status, 'Finding the source file and its version history on GitHub…', 'loading');
+      setStatus(status, '', '');
+      setLoadingSurface(diffPage, 'mapping');
       try {
         if (context.targetUrl && value !== context.targetUrl) {
           root.location.assign(diffUrlForLearnUrl(value, root.location.href));
           return;
         }
         currentInfo = siteUrlToRepoInfo(value);
+        setLoadingSurface(diffPage, 'history');
         historyPage = 1;
         currentHistory = await loadHistory(currentInfo, savedToken());
         if (!currentHistory.length) {
           throw new Error(`No file history was found at ${currentInfo.path}. The Learn page may use a nonstandard source path.`);
         }
         historyHasMore = currentHistory.length === HISTORY_PAGE_SIZE;
+        setLoadingSurface(diffPage, 'revisions');
         const comparison = await loadComparison(currentInfo, savedToken(), requestedRefs, currentHistory);
+        setLoadingSurface(diffPage, 'rendering');
+        await waitForMinimumLoading(loadingStartedAt);
         renderComparison(comparison);
       } catch (error) {
         intro.hidden = false;
         reportApiError(error, () => loadArticle(value, requestedRefs));
       } finally {
         submit.disabled = false;
-        submit.textContent = 'Load version history';
+        submit.textContent = 'Load diff';
       }
     }
 
@@ -856,6 +1021,9 @@
     viewUrlForState,
     diffUrlForLearnUrl,
     shortcutUrlForLearnUrl,
+    prepareShortcutLanding,
+    setLoadingSurface,
+    remainingLoadingDuration,
     siteUrlToRepoInfo,
     githubFileUrl,
     extractTitle,
@@ -867,6 +1035,8 @@
     renderMarkdown,
     renderVisualDiff,
     renderMarkdownDiff,
+    continuousVisualDiffGroups,
+    continuousMarkdownDiffGroups,
     request,
     loadHistory,
     loadComparison,

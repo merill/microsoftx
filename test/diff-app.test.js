@@ -15,9 +15,15 @@ const {
   viewUrlForState,
   diffUrlForLearnUrl,
   shortcutUrlForLearnUrl,
+  prepareShortcutLanding,
+  setLoadingSurface,
+  remainingLoadingDuration,
   siteUrlToRepoInfo,
   sanitizeRenderedHtml,
   renderVisualDiff,
+  renderMarkdownDiff,
+  continuousVisualDiffGroups,
+  continuousMarkdownDiffGroups,
   request,
   loadHistory,
   validateComparisonRefs,
@@ -47,6 +53,7 @@ test('any secure site origin supports portable paths while site routes remain la
     resolveShortcutLocation('http://127.0.0.1:4173/?url=https%3A%2F%2Flearn.microsoft.com%2Fen-us%2Fentra%2Fidentity%2Fexample').targetUrl,
     'https://learn.microsoft.com/en-us/entra/identity/example'
   );
+  assert.equal(resolveShortcutLocation('http://learn.localhost:4173/').mode, 'landing');
   assert.equal(
     resolveShortcutLocation('https://alternative.example/?url=https%3A%2F%2Flearn.microsoft.com%2Fen-us%2Fazure%2Fexample').routeStyle,
     'query'
@@ -68,6 +75,55 @@ test('Learn URLs convert to same-origin portable diff paths and reject other sit
     () => diffUrlForLearnUrl('https://learn.microsoft.com/en-us/entra/example', 'http://alternative.example/'),
     /requires HTTPS/
   );
+});
+
+test('the bare learn shortcut host puts the diff form directly below the hero', () => {
+  const dom = new JSDOM(`<!doctype html><body><main data-marketing-root>
+    <section class="hero"></section>
+    <section class="shortcut-demo"></section>
+    <section id="try-it"><div class="section-heading"><span class="eyebrow">Try it</span><h2>Old heading</h2><p>Old introduction</p></div><form><p class="form-help">Old help</p></form></section>
+  </main></body>`);
+  const { document } = dom.window;
+
+  assert.equal(prepareShortcutLanding(document, 'https://learn.microsoftx.com/'), true);
+  assert.ok(document.body.classList.contains('shortcut-landing'));
+  assert.equal(document.querySelector('.hero').nextElementSibling.id, 'try-it');
+  assert.equal(document.querySelector('#try-it .eyebrow').textContent, 'Start a page diff');
+  assert.match(document.querySelector('#try-it h2').textContent, /Microsoft Learn page/);
+  assert.match(document.querySelector('#try-it .form-help').textContent, /learn\.microsoftx\.com\/en-us/);
+
+  const apexDom = new JSDOM('<!doctype html><body><main data-marketing-root><section class="hero"></section><section id="try-it"></section></main></body>');
+  assert.equal(prepareShortcutLanding(apexDom.window.document, 'https://microsoftx.com/'), false);
+  assert.equal(apexDom.window.document.body.className, '');
+});
+
+test('the comparison loader advances through meaningful GitHub phases', () => {
+  const dom = new JSDOM(`<!doctype html><main data-diff-page><section data-diff-loading hidden>
+    <h2 data-loading-title></h2><p data-loading-message></p>
+    <div data-loading-progress role="progressbar"></div>
+    <ol><li data-loading-phase="mapping"></li><li data-loading-phase="history"></li><li data-loading-phase="revisions"></li><li data-loading-phase="rendering"></li></ol>
+  </section></main>`);
+  const page = dom.window.document.querySelector('[data-diff-page]');
+
+  setLoadingSurface(page, 'revisions');
+  assert.ok(page.classList.contains('is-loading'));
+  assert.equal(page.dataset.loadingState, 'revisions');
+  assert.equal(page.querySelector('[data-loading-progress]').getAttribute('aria-valuenow'), '72');
+  assert.match(page.querySelector('[data-loading-title]').textContent, /versions/);
+  assert.equal(page.querySelectorAll('.is-complete').length, 2);
+  assert.equal(page.querySelector('.is-active').dataset.loadingPhase, 'revisions');
+
+  setLoadingSurface(page, '', false);
+  assert.equal(page.querySelector('[data-diff-loading]').hidden, true);
+  assert.ok(!page.classList.contains('is-loading'));
+});
+
+test('successful comparisons keep the loading animation visible for at least two seconds', () => {
+  assert.equal(remainingLoadingDuration(1000, 1000), 2000);
+  assert.equal(remainingLoadingDuration(1000, 1500), 1500);
+  assert.equal(remainingLoadingDuration(1000, 2999), 1);
+  assert.equal(remainingLoadingDuration(1000, 3000), 0);
+  assert.equal(remainingLoadingDuration(1000, 5000), 0);
 });
 
 test('revision parameters validate pairs and hexadecimal SHAs', () => {
@@ -184,6 +240,48 @@ test('visual rendering removes front matter and produces insert/delete markup', 
   );
   assert.doesNotMatch(output, /title: Example/);
   assert.match(output, /<ins|<del/);
+});
+
+test('continuous changed content is grouped into a single navigation stop', () => {
+  const document = new JSDOM(`<div data-diff-panel="visual">
+    <div class="rich-diff">
+      <h1><ins>Added heading</ins></h1>
+      <p><ins>Added introduction</ins></p>
+      <p>Unchanged context</p>
+      <p><del>Old ending</del><ins>New ending</ins></p>
+    </div>
+  </div>`).window.document;
+  const groups = continuousVisualDiffGroups(document.querySelector('[data-diff-panel]'));
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map(group => group.length), [2, 1]);
+
+  document.querySelector('.rich-diff p:nth-of-type(2)').innerHTML = '<ins>Added context</ins>';
+  const continuous = continuousVisualDiffGroups(document.querySelector('[data-diff-panel]'));
+  assert.equal(continuous.length, 1);
+  assert.equal(continuous[0].length, 4);
+});
+
+test('Markdown navigation treats each continuous hunk as one change', () => {
+  const document = new JSDOM(`<div data-diff-panel="markdown">
+    <span class="markdown-diff-line hunk">@@ -1 +1 @@</span>
+    <span class="markdown-diff-line removed">-old</span>
+    <span class="markdown-diff-line added">+new</span>
+    <span class="markdown-diff-line hunk">@@ -10 +10 @@</span>
+    <span class="markdown-diff-line added">+another</span>
+  </div>`).window.document;
+  assert.equal(continuousMarkdownDiffGroups(document.querySelector('[data-diff-panel]')).length, 2);
+});
+
+test('new files are identified inside both visual and Markdown diffs', () => {
+  const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/identity/example');
+  const after = '# Brand new page\n\nThis content was just added.\n';
+  const visual = renderVisualDiff('', after, info, '', 'b'.repeat(40));
+  const markdown = renderMarkdownDiff('', after, info, '', 'b'.repeat(40));
+  for (const output of [visual, markdown]) {
+    assert.match(output, /New page/);
+    assert.match(output, /did not exist before this revision/);
+  }
+  assert.match(markdown, /new file/);
 });
 
 test('comparison picker requires chronological, distinct versions', () => {

@@ -161,6 +161,12 @@ test('GitHub token settings use the Entra-style slide-over and retry flow', () =
   const siteJs = read('assets/site.js');
   const diffJs = read('assets/diff-app.js');
   assert.match(html, /data-github-token-open[^>]*aria-controls="github-token-drawer"[^>]*aria-expanded="false"/);
+  assert.match(html, /data-theme-toggle[\s\S]*?<svg class="nucleo-header-icon nucleo-dark-mode-icon" aria-hidden="true" focusable="false" viewBox="0 0 18 18">[\s\S]*?class="nc-icon-wrapper"/);
+  assert.match(html, /data-github-token-open[\s\S]*?<svg class="nucleo-header-icon nucleo-gear-keyhole-icon" aria-hidden="true" focusable="false" viewBox="0 0 18 18">[\s\S]*?class="nc-icon-wrapper"/);
+  assert.doesNotMatch(html, /data-github-token-open[\s\S]*?<circle cx="12" cy="12" r="3"><\/circle>/);
+  assert.match(html, /<div class="header-controls">[\s\S]*data-theme-toggle[\s\S]*data-github-token-open[\s\S]*<\/div>/);
+  assert.match(siteCss, /\.header-controls \{[^}]*gap: \.15rem;[^}]*margin-left: -\.85rem;/);
+  assert.match(siteCss, /\.header-controls \.header-action \{[^}]*width: 38px;[^}]*padding: \.35rem;/);
   assert.match(html, /class="token-drawer-backdrop" data-github-token-backdrop hidden/);
   assert.match(html, /data-github-token-drawer role="dialog" aria-modal="true"/);
   assert.match(html, /data-github-token-alert hidden/);
@@ -176,6 +182,10 @@ test('GitHub token settings use the Entra-style slide-over and retry flow', () =
   assert.ok(html.indexOf('token-drawer-help') < html.indexOf('data-github-token-save'));
   assert.ok(html.indexOf('data-github-token-input') < html.indexOf('token-drawer-intro'));
   assert.ok(html.indexOf('data-github-token-save') < html.indexOf('token-rate-summary'));
+  assert.match(html, /class="button-primary" type="button" data-github-token-save>Save<\/button>/);
+  assert.match(html, /class="button-secondary" type="button" data-github-token-forget>Remove token<\/button>/);
+  assert.doesNotMatch(html, />Save token<\/button>/);
+  assert.doesNotMatch(siteCss, /\.token-save|\.token-forget/);
   assert.match(html, /Add a token above to continue/);
   assert.doesNotMatch(read('about/index.html'), /data-github-token-drawer|data-github-token-open/);
   assert.match(siteCss, /\.github-token-drawer \{[\s\S]*position: fixed;[\s\S]*right: 0;[\s\S]*height: 100dvh;/);
@@ -195,35 +205,69 @@ test('GitHub token settings use the Entra-style slide-over and retry flow', () =
   assert.doesNotMatch(diffJs, /setupTokenDialog|data-token-open|data-token-dialog/);
 });
 
-test('diff navigation is centered below the sticky header', () => {
-  const html = read('index.html');
+test('diff navigation remains anchored and centered as the page scrolls', () => {
+  const document = new JSDOM(read('index.html')).window.document;
   const siteCss = read('assets/site.css');
   const diffJs = read('assets/diff-app.js');
-  assert.match(html, /data-diff-previous[^>]*>← Previous diff<\/button><span class="diff-navigator-label"/);
-  assert.match(html, /data-diff-next[^>]*>Next diff →<\/button>/);
-  assert.match(siteCss, /\.diff-navigator \{[\s\S]*position: fixed;[\s\S]*top: 90px;[\s\S]*left: 50%;[\s\S]*transform: translateX\(-50%\);/);
-  assert.match(diffJs, /function positionUnderHeader\(\)/);
+  assert.ok(document.querySelector('[data-diff-previous]'));
+  assert.ok(document.querySelector('[data-diff-next]'));
+  assert.equal(document.querySelector('.diff-hero [data-diff-navigator]'), null);
+  assert.match(siteCss, /\.diff-navigator \{[\s\S]*position: fixed;[\s\S]*left: 50%;[\s\S]*transform: translateX\(-50%\);/);
+  assert.match(siteCss, /\.diff-navigator button \{[\s\S]*height: 40px;/);
+  assert.match(siteCss, /\.diff-mode \.site-header \{ position: static; \}/);
+  assert.match(diffJs, /function positionNavigator\(\)/);
   assert.match(diffJs, /getBoundingClientRect\(\)\.bottom/);
-  assert.match(diffJs, /addEventListener\('resize', positionUnderHeader\)/);
+  assert.match(diffJs, /addEventListener\('scroll', scheduleNavigatorPosition/);
+});
+
+test('diff shell includes an accessible animated GitHub loading workspace', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const loading = document.querySelector('[data-diff-loading]');
+  assert.ok(loading);
+  assert.equal(loading.hidden, true);
+  assert.ok(loading.querySelector('.docs-bot'));
+  assert.equal(loading.querySelectorAll('[data-loading-phase]').length, 4);
+  const progress = loading.querySelector('[role="progressbar"]');
+  assert.equal(progress.getAttribute('aria-valuemin'), '0');
+  assert.equal(progress.getAttribute('aria-valuemax'), '100');
+  assert.match(read('assets/site.css'), /@keyframes docs-bot-float/);
+  assert.match(read('assets/site.css'), /\.diff-page\.is-loading \.diff-hero/);
+  assert.match(read('assets/diff-app.js'), /MINIMUM_LOADING_DURATION = 2000/);
+  assert.match(read('assets/diff-app.js'), /await waitForMinimumLoading\(loadingStartedAt\)/);
 });
 
 test('diff shell provides the timeline, advanced comparison, and share state without commit identities', () => {
   const html = read('index.html');
+  const document = new JSDOM(html).window.document;
   const css = read('assets/site.css');
   const js = read('assets/diff-app.js');
   assert.match(html, /data-version-explorer/);
   assert.match(html, /class="diff-workspace"[\s\S]*class="diff-content"[\s\S]*class="version-sidebar"/);
   assert.doesNotMatch(html, /data-result-revisions/);
+  assert.doesNotMatch(html, /data-result-history|File history/);
+  assert.match(html, /data-result-learn[^>]*aria-label="Open on Microsoft Learn"/);
+  assert.match(html, /data-result-github[^>]*aria-label="Open the source on GitHub"/);
+  assert.match(html, /class="microsoft-source-icon" src="\/assets\/icons\/microsoft\.svg"/);
+  assert.doesNotMatch(html, /data-result-path|class="result-path"/);
+  assert.doesNotMatch(js, /querySelector\('\[data-result-path\]'\)/);
+  assert.equal((html.match(/class="source-links"/g) || []).length, 1);
+  assert.deepEqual(
+    [...document.querySelectorAll('.source-links a')].map(link => link.textContent.trim()),
+    ['Microsoft Learn', 'GitHub']
+  );
   assert.doesNotMatch(html, /Visual blame|data-blame-view|data-diff-tab="blame"/i);
   assert.match(js, /Choose a point in time/);
   assert.match(js, /Advanced: compare any two versions/);
-  assert.match(js, /Copy link to this view/);
+  assert.match(js, /data-share-view aria-label="Copy link to this view" title="Copy link to this view"><svg/);
+  assert.doesNotMatch(js, /data-share-view>Copy link to this view/);
+  assert.match(css, /\.share-view-button \{[\s\S]*position: absolute;[\s\S]*top: 1rem;[\s\S]*right: 1rem;[\s\S]*width: 36px;[\s\S]*height: 36px;/);
   assert.match(js, /viewUrlForState/);
   assert.match(js, /_mx_view/);
   assert.doesNotMatch(js, /version-meta|commit\.author\?\.login|commit\.commit\?\.author\?\.name|Visual blame/i);
   assert.match(css, /\.version-timeline/);
   assert.match(css, /\.diff-workspace \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(330px, 370px\)/);
   assert.match(css, /\.version-sidebar \{ position: sticky;/);
+  assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*\.version-sidebar \{ order: 0; \}/);
   assert.doesNotMatch(css, /\.visual-blame|\.blame-row|\.version-meta/);
 });
 
@@ -273,6 +317,10 @@ test('footer links to Maester Cloud and GitHub Sponsors', () => {
   assert.ok(dashboard);
   assert.equal(dashboard.getAttribute('width'), '2880');
   assert.equal(dashboard.getAttribute('height'), '1728');
+  const css = read('assets/site.css');
+  assert.match(css, /\.footer-feature-visual \{[^}]*aspect-ratio: 5 \/ 3;/);
+  assert.match(css, /\.footer-feature-visual img \{[^}]*object-fit: contain;/);
+  assert.match(css, /\.footer-feature-heading img \{[^}]*aspect-ratio: 1 \/ 1;/);
   assert.equal(document.querySelector('.footer-support'), null);
   assert.equal(document.querySelector('.footer-community'), null);
   assert.doesNotMatch(document.querySelector('footer').textContent, /More community projects/);
@@ -333,6 +381,23 @@ test('social preview uses a deployable 1200 by 630 PNG', () => {
   assert.match(source, />ADD THE X</);
   assert.match(source, /stroke-linecap="round"/);
   assert.equal(fs.existsSync(path.join(dist, 'favicon.svg')), false);
+});
+
+test('brand and favicon raster assets use transparent, correctly sized PNGs', () => {
+  const assets = [
+    ['microsoftx-icon-512.png', 512],
+    ['microsoftx-icon-192.png', 192],
+    ['microsoftx-icon-64.png', 64],
+    ['favicon-32.png', 32]
+  ];
+  for (const [file, size] of assets) {
+    const image = fs.readFileSync(path.join(dist, 'assets/branding', file));
+    assert.equal(image.subarray(1, 4).toString(), 'PNG', file);
+    assert.equal(image.readUInt32BE(16), size, file);
+    assert.equal(image.readUInt32BE(20), size, file);
+    assert.equal(image[25], 6, `${file} must use RGBA transparency`);
+  }
+  assert.match(read('assets/site.css'), /\.header-inner > \.brand \.brand-logo \{ width: 40px; height: 40px; \}/);
 });
 
 test('the build accepts a validated primary canonical origin', () => {
