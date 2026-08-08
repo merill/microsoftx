@@ -3,7 +3,22 @@
 
   const THEME_KEY = 'microsoftx-theme';
   const GITHUB_TOKEN_STORAGE_KEY = 'microsoftx-github-token';
+  const USERJOT_PROJECT_ID = 'cmsjwvw5q3wdt0ipd5tpvg5y5';
   const root = document.documentElement;
+
+  window.$ujq = window.$ujq || [];
+  window.uj = window.uj || new Proxy({}, {
+    get: (_target, property) => (...args) => window.$ujq.push([property, ...args])
+  });
+  document.head.appendChild(Object.assign(document.createElement('script'), {
+    src: 'https://cdn.userjot.com/sdk/v2/uj.js',
+    type: 'module',
+    async: true
+  }));
+  window.uj.init(USERJOT_PROJECT_ID, { widget: true, theme: 'auto', position: 'right' });
+  document.querySelectorAll('[data-userjot-feedback]').forEach(button => button.addEventListener('click', () => {
+    window.uj.showWidget({ section: 'feedback' });
+  }));
 
   function preferredTheme() {
     try {

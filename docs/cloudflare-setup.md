@@ -138,8 +138,8 @@ Set `X-Robots-Tag` to `noindex, nofollow` for every response. The alternative is
 ## 7. HTTPS and security
 
 - Turn on **Always Use HTTPS** for the zone after both certificates are active.
-- Leave the Pages-generated `_headers` file enabled. It restricts scripts to same-origin assets and browser API connections to `api.github.com`.
-- Do not add broad CSP exceptions such as `unsafe-inline` or `unsafe-eval`.
+- Leave the Pages-generated `_headers` file enabled. It restricts scripts to same-origin assets plus the UserJot SDK, and browser API connections to `api.github.com` and the UserJot widget service.
+- Keep `script-src` free of broad exceptions such as `unsafe-inline` and `unsafe-eval`. The generated `style-src` permits inline styles because the UserJot widget injects its interface styles at runtime.
 - Do not put a shared GitHub token in Pages environment variables. The static application has no legitimate use for one.
 - Optional GitHub tokens are scoped by the browser to the exact origin. A user who switches to the alternative domain must add the token again there.
 

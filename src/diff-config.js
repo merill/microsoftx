@@ -60,6 +60,16 @@
         fileExtension: '.md'
       },
       {
+        id: 'azure-virtual-machines-learn',
+        label: 'Azure Virtual Machines',
+        siteUrl: 'https://learn.microsoft.com/azure/virtual-machines/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/azure-compute-docs',
+        repositoryPathPrefix: 'articles/virtual-machines',
+        defaultBranch: 'main',
+        fileExtension: '.md'
+      },
+      {
         id: 'azure-learn',
         label: 'Azure',
         siteUrl: 'https://learn.microsoft.com/azure/',

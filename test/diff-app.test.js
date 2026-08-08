@@ -179,6 +179,7 @@ test('the supplied Entra article maps to the expected public repository path', (
 test('representative configured docsets map to their public repositories', () => {
   const examples = [
     ['https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview', 'MicrosoftDocs/entra-docs', 'docs/identity/conditional-access/overview.md', 'main'],
+    ['https://learn.microsoft.com/en-us/azure/virtual-machines/linux/quick-create-cli', 'MicrosoftDocs/azure-compute-docs', 'articles/virtual-machines/linux/quick-create-cli.md', 'main'],
     ['https://learn.microsoft.com/en-us/azure/azure-functions/functions-overview', 'MicrosoftDocs/azure-docs', 'articles/azure-functions/functions-overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/dotnet/core/introduction', 'dotnet/docs', 'docs/core/introduction.md', 'main'],
     ['https://learn.microsoft.com/en-us/powershell/scripting/overview', 'MicrosoftDocs/PowerShell-Docs', 'reference/docs-conceptual/overview.md', 'main'],

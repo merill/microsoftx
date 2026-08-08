@@ -111,6 +111,15 @@ test('home page clearly animates the one-letter shortcut without a video runtime
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.shortcut-x \{ max-width: 1em; opacity: 1;/);
 });
 
+test('home page offers a one-click sample diff on the active site origin', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const sample = document.querySelector('[data-home-sample-link]');
+  assert.ok(sample);
+  assert.equal(sample.textContent.trim(), 'View sample diff');
+  assert.equal(sample.getAttribute('href'), '/en-us/entra/identity/authentication/concept-sms-voice-retirement');
+  assert.ok(sample.classList.contains('button-secondary'));
+});
+
 test('GitHub token FAQ explains anonymous and authenticated hourly limits', () => {
   const document = new JSDOM(read('index.html')).window.document;
   const tokenQuestion = [...document.querySelectorAll('.faq details')]
@@ -339,6 +348,33 @@ test('footer links to Maester Cloud and GitHub Sponsors', () => {
   assert.ok(document.querySelector('.footer-utility'));
 });
 
+test('UserJot is initialized for site feedback on every page', () => {
+  const siteJs = read('assets/site.js');
+  assert.match(siteJs, /USERJOT_PROJECT_ID = 'cmsjwvw5q3wdt0ipd5tpvg5y5'/);
+  assert.match(siteJs, /https:\/\/cdn\.userjot\.com\/sdk\/v2\/uj\.js/);
+  assert.match(siteJs, /window\.uj\.init\(USERJOT_PROJECT_ID, \{ widget: true, theme: 'auto', position: 'right' \}\)/);
+  assert.match(siteJs, /window\.uj\.showWidget\(\{ section: 'feedback' \}\)/);
+
+  for (const file of ['index.html', 'about/index.html', 'supported/index.html', 'privacy/index.html']) {
+    const document = new JSDOM(read(file)).window.document;
+    const feedback = document.querySelector('button.footer-feedback-button[data-userjot-feedback]');
+    assert.ok(feedback, file);
+    assert.equal(feedback.textContent.trim(), 'Report an issue or share feedback');
+  }
+
+  const dom = new JSDOM(read('index.html'), { url: 'https://microsoftx.test/', runScripts: 'outside-only' });
+  dom.window.matchMedia = () => ({ matches: false });
+  dom.window.eval(siteJs);
+  assert.ok(dom.window.document.querySelector('script[src="https://cdn.userjot.com/sdk/v2/uj.js"]'));
+  assert.deepEqual(JSON.parse(JSON.stringify(dom.window.$ujq[0])), [
+    'init',
+    'cmsjwvw5q3wdt0ipd5tpvg5y5',
+    { widget: true, theme: 'auto', position: 'right' }
+  ]);
+  dom.window.document.querySelector('[data-userjot-feedback]').click();
+  assert.deepEqual(JSON.parse(JSON.stringify(dom.window.$ujq.at(-1))), ['showWidget', { section: 'feedback' }]);
+});
+
 test('About page links through to Merill tools and projects', () => {
   const document = new JSDOM(read('about/index.html')).window.document;
   const tools = [...document.querySelectorAll('[data-merill-tools] a')];
@@ -362,11 +398,14 @@ test('sitemap contains only apex static pages and robots points to it', () => {
 
 test('Pages headers enforce the browser-only security boundary', () => {
   const headers = read('_headers');
-  assert.match(headers, /connect-src 'self' https:\/\/api\.github\.com/);
-  assert.match(headers, /script-src 'self'/);
+  assert.match(headers, /connect-src 'self' https:\/\/api\.github\.com https:\/\/widget\.userjot\.com/);
+  assert.match(headers, /script-src 'self' https:\/\/cdn\.userjot\.com/);
+  assert.match(headers, /style-src 'self' 'unsafe-inline'/);
   assert.match(headers, /frame-ancestors 'none'/);
   assert.match(headers, /X-Content-Type-Options: nosniff/);
-  assert.doesNotMatch(headers, /unsafe-inline|unsafe-eval/);
+  const scriptPolicy = headers.match(/script-src [^;]+/)?.[0] || '';
+  assert.doesNotMatch(scriptPolicy, /unsafe-inline|unsafe-eval/);
+  assert.doesNotMatch(headers, /unsafe-eval/);
 });
 
 test('all local script, stylesheet, and icon references exist in the build', () => {
