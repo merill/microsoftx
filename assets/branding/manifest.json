@@ -1,5 +1,5 @@
 {
-  "brand": "MicrosoftX",
+  "brand": "Microsoft Docs X-Ray",
   "selectedDirection": "split-document-x",
   "generatedAt": "2026-08-08",
   "generator": "Codex built-in ImageGen",
@@ -33,6 +33,18 @@
       "width": 32,
       "height": 32,
       "sha256": "0faabcf9f071b288841e535fe79941137055ce3ab87f52da074f241c760e756a"
+    },
+    {
+      "path": "microsoftx-og.png",
+      "width": 1200,
+      "height": 630,
+      "sha256": "03824d471fe46bfc32a27ab34a6d94c50690ba241bdc33096b761c8e6e34f76b"
+    },
+    {
+      "path": "microsoftx-og.svg",
+      "width": 1200,
+      "height": 630,
+      "sha256": "e6f2d38ac54433ad4da30f12fa6dd69d18e42dab8f9c31238e6d4c15059f6a6f"
     }
   ]
 }

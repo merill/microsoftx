@@ -46,5 +46,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`MicrosoftX preview: http://127.0.0.1:${port}`);
+  console.log(`Microsoft Docs X-Ray preview: http://127.0.0.1:${port}`);
 });

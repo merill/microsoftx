@@ -8,6 +8,8 @@
   const TOKEN_STORAGE_KEY = 'microsoftx-github-token';
   const PRODUCTION_APEX = 'microsoftx.com';
   const PRODUCTION_SHORTCUT = 'learn.microsoftx.com';
+  const HISTORY_PAGE_SIZE = 100;
+  const VIEW_NAMES = new Set(['visual', 'markdown']);
   let nodeConfig = null;
   if (typeof module === 'object' && module.exports && typeof require === 'function') {
     try { nodeConfig = require('./diff-config'); } catch {}
@@ -38,6 +40,11 @@
     return { base: base || null, head };
   }
 
+  function viewFromSearchParams(searchParams, name = '_mx_view') {
+    const view = (searchParams.get(name) || 'visual').trim().toLowerCase();
+    return VIEW_NAMES.has(view) ? view : 'visual';
+  }
+
   function isLocalHostname(hostname) {
     return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
   }
@@ -50,25 +57,43 @@
 
     if (hostname === PRODUCTION_SHORTCUT) {
       if (pageUrl.pathname === '/' || !pageUrl.pathname.replaceAll('/', '')) {
-        return { mode: 'landing', pageUrl: pageUrl.href, targetUrl: null, refs: null };
+        return { mode: 'landing', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual' };
       }
       const target = new URL(`https://learn.microsoft.com${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
       const refs = revisionRefsFromSearchParams(target.searchParams);
+      const view = viewFromSearchParams(target.searchParams);
       target.searchParams.delete('_mx_base');
       target.searchParams.delete('_mx_head');
-      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs };
+      target.searchParams.delete('_mx_view');
+      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs, view };
     }
 
     if (hostname === PRODUCTION_APEX || hostname === `www.${PRODUCTION_APEX}` || isLocalHostname(hostname)) {
       const queryTarget = pageUrl.searchParams.get('url');
-      if (!queryTarget) return { mode: 'landing', pageUrl: pageUrl.href, targetUrl: null, refs: null };
+      if (!queryTarget) return { mode: 'landing', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual' };
       let target;
       try { target = new URL(queryTarget); } catch { throw new Error('The supplied documentation URL is invalid.'); }
       const refs = revisionRefsFromSearchParams(pageUrl.searchParams);
-      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs };
+      const view = viewFromSearchParams(pageUrl.searchParams);
+      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs, view };
     }
 
-    return { mode: 'unsupported-host', pageUrl: pageUrl.href, targetUrl: null, refs: null };
+    return { mode: 'unsupported-host', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual' };
+  }
+
+  function viewUrlForState(pageHref, targetUrl, refs, view = 'visual') {
+    let pageUrl;
+    try { pageUrl = new URL(pageHref); } catch { throw new Error('The current page URL is invalid.'); }
+    const hostname = pageUrl.hostname.toLowerCase();
+    if (hostname !== PRODUCTION_SHORTCUT) pageUrl.searchParams.set('url', targetUrl);
+    if (refs?.base) pageUrl.searchParams.set('_mx_base', refs.base);
+    else pageUrl.searchParams.delete('_mx_base');
+    if (refs?.head) pageUrl.searchParams.set('_mx_head', refs.head);
+    else pageUrl.searchParams.delete('_mx_head');
+    const selectedView = VIEW_NAMES.has(view) ? view : 'visual';
+    if (selectedView === 'visual') pageUrl.searchParams.delete('_mx_view');
+    else pageUrl.searchParams.set('_mx_view', selectedView);
+    return pageUrl.href;
   }
 
   function shortcutUrlForLearnUrl(value) {
@@ -353,34 +378,48 @@
     return accept === 'application/vnd.github.raw+json' ? response.text() : response.json();
   }
 
-  async function loadComparison(info, token, refs) {
+  async function loadHistory(info, token, page = 1, perPage = HISTORY_PAGE_SIZE, ref = info.defaultBranch) {
+    const encodedPath = apiPath(info.path);
+    const endpoint = `${info.apiRoot}/commits?path=${encodedPath}&sha=${encodeURIComponent(ref)}&per_page=${perPage}&page=${page}`;
+    const commits = await request(endpoint, token);
+    if (!Array.isArray(commits)) throw new Error('GitHub returned an invalid file history.');
+    return commits;
+  }
+
+  async function rawRevision(info, token, ref) {
     const encodedPath = apiPath(info.path);
     const rawUrl = ref => `${info.apiRoot}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`;
-    const rawAt = ref => request(rawUrl(ref), token, 'application/vnd.github.raw+json')
+    return request(rawUrl(ref), token, 'application/vnd.github.raw+json')
       .catch(error => error.status === 404 ? '' : Promise.reject(error));
+  }
+
+  async function loadComparison(info, token, refs, suppliedHistory) {
+    let history = suppliedHistory;
+    if (!refs && !history) history = await loadHistory(info, token, 1, 2);
+
+    const findCommit = ref => history?.find(commit => commit.sha.toLowerCase() === String(ref || '').toLowerCase()) || null;
+    const commitAt = async ref => findCommit(ref) || request(`${info.apiRoot}/commits/${encodeURIComponent(ref)}`, token);
 
     if (refs) {
-      const commitUrl = ref => `${info.apiRoot}/commits/${encodeURIComponent(ref)}`;
-      const headCommit = await request(commitUrl(refs.head), token);
+      const headCommit = await commitAt(refs.head);
       const baseRef = refs.base || headCommit.parents?.[0]?.sha || '';
       if (!baseRef) throw new Error('The selected after revision does not have a parent to compare.');
       const [baseCommit, before, after] = await Promise.all([
-        request(commitUrl(baseRef), token),
-        rawAt(baseRef),
-        rawAt(refs.head)
+        commitAt(baseRef),
+        rawRevision(info, token, baseRef),
+        rawRevision(info, token, refs.head)
       ]);
       return { info, headCommit, baseCommit, after, before };
     }
 
-    const commits = await request(`${info.apiRoot}/commits?path=${encodedPath}&per_page=2`, token);
-    if (!Array.isArray(commits) || !commits.length) {
+    if (!Array.isArray(history) || !history.length) {
       throw new Error(`No file history was found at ${info.path}. The Learn page may use a nonstandard source path.`);
     }
-    const headCommit = commits[0];
-    const baseCommit = commits[1] || null;
+    const headCommit = history[0];
+    const baseCommit = history[1] || null;
     const [after, before] = await Promise.all([
-      rawAt(headCommit.sha),
-      baseCommit ? rawAt(baseCommit.sha) : Promise.resolve('')
+      rawRevision(info, token, headCommit.sha),
+      baseCommit ? rawRevision(info, token, baseCommit.sha) : Promise.resolve('')
     ]);
     return { info, headCommit, baseCommit, after, before };
   }
@@ -392,10 +431,68 @@
     element.textContent = message || '';
   }
 
-  function commitCard(commit, label) {
-    if (!commit) return `<section class="revision-card"><span class="eyebrow">${label}</span><strong>New file</strong><p>No earlier revision was found.</p></section>`;
-    const author = commit.commit?.author || {};
-    return `<section class="revision-card"><span class="eyebrow">${label}</span><a href="${escapeHtml(commit.html_url)}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(commit.sha.slice(0, 7))}</strong></a><p>${escapeHtml(firstLine(commit.commit?.message))}</p>${author.date ? `<time datetime="${escapeHtml(author.date)}">${escapeHtml(formatDate(author.date))}</time>` : ''}</section>`;
+  function commitDate(commit) {
+    return commit?.commit?.author?.date || commit?.commit?.committer?.date || '';
+  }
+
+  function commitOption(commit, label) {
+    const date = commitDate(commit);
+    const text = `${label || (date ? formatDate(date) : 'Unknown date')} — ${firstLine(commit.commit?.message) || 'Documentation update'}`;
+    return `<option value="${escapeHtml(commit.sha)}">${escapeHtml(text)}</option>`;
+  }
+
+  function comparisonSummary(comparison) {
+    const revision = (commit, label) => {
+      if (!commit) return `<div><span>${label}</span><strong>New file</strong></div>`;
+      const date = commitDate(commit);
+      return `<div><span>${label}</span><a href="${escapeHtml(commit.html_url)}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(date ? formatDate(date) : 'Unknown date')}</strong><small>${escapeHtml(firstLine(commit.commit?.message) || 'Documentation update')}</small></a></div>`;
+    };
+    return `${revision(comparison.baseCommit, 'From')}<span class="comparison-arrow" aria-hidden="true">→</span>${revision(comparison.headCommit, 'To')}`;
+  }
+
+  function historyExplorer(history, comparison, hasMore) {
+    const baseSha = comparison.baseCommit?.sha || '';
+    const headSha = comparison.headCommit?.sha || '';
+    const latestSha = history[0]?.sha || '';
+    const knownCommits = [...history];
+    for (const commit of [comparison.headCommit, comparison.baseCommit]) {
+      if (commit && !knownCommits.some(item => item.sha === commit.sha)) knownCommits.push(commit);
+    }
+    knownCommits.sort((left, right) => new Date(commitDate(right)).getTime() - new Date(commitDate(left)).getTime());
+    const options = knownCommits.map((commit, index) => commitOption(commit, index === 0 && commit.sha === latestSha ? 'Current version' : '')).join('');
+    const timeline = history.map((commit, index) => {
+      const date = commitDate(commit);
+      const selected = commit.sha === baseSha || commit.sha === headSha;
+      const role = commit.sha === baseSha ? 'From' : (commit.sha === headSha ? 'To' : '');
+      const action = index === 0 ? 'Show latest change' : 'Compare from here to current';
+      return `<li class="version-event${selected ? ' selected' : ''}${index === 0 ? ' current' : ''}"><span class="version-node" aria-hidden="true"></span><button type="button" data-history-from="${escapeHtml(commit.sha)}" aria-pressed="${selected}"><span class="version-date">${escapeHtml(index === 0 ? 'Current version' : formatDate(date))}${role ? `<em>${role}</em>` : ''}</span><strong>${escapeHtml(firstLine(commit.commit?.message) || 'Documentation update')}</strong><small>${action}</small></button></li>`;
+    }).join('');
+    return `<section class="version-explorer" aria-labelledby="version-history-heading"><header><div><span class="eyebrow">Version history</span><h2 id="version-history-heading">Choose a point in time</h2><p>Select any change to compare that version with the current page.</p></div><button class="share-view-button" type="button" data-share-view>Copy link to this view</button></header><div class="version-layout"><div><ol class="version-timeline" data-version-timeline>${timeline}</ol>${hasMore ? '<button class="load-history-button" type="button" data-load-older>Load older versions</button>' : ''}</div><aside class="comparison-controls"><span class="eyebrow">Current comparison</span><div class="comparison-range" data-comparison-summary>${comparisonSummary(comparison)}</div><button class="latest-change-button" type="button" data-compare-latest>Show latest change</button><details><summary>Advanced: compare any two versions</summary><div class="advanced-comparison"><label>Earlier version<select data-comparison-base>${options}</select></label><label>Later version<select data-comparison-head>${options}</select></label><button class="button-primary" type="button" data-compare-selected>Compare selected versions</button><p data-comparison-error role="status"></p></div></details><p class="share-view-status" data-share-status role="status" aria-live="polite"></p></aside></div></section>`;
+  }
+
+  function setHistorySelections(container, comparison) {
+    const baseSelect = container.querySelector('[data-comparison-base]');
+    const headSelect = container.querySelector('[data-comparison-head]');
+    if (baseSelect && comparison.baseCommit) baseSelect.value = comparison.baseCommit.sha;
+    if (headSelect && comparison.headCommit) headSelect.value = comparison.headCommit.sha;
+  }
+
+  function comparisonDescription(comparison, history) {
+    const isLatest = comparison.headCommit?.sha === history[0]?.sha && comparison.baseCommit?.sha === history[1]?.sha;
+    if (isLatest) return 'in the latest change';
+    if (comparison.headCommit?.sha === history[0]?.sha) return `since ${formatDate(commitDate(comparison.baseCommit))}`;
+    return `between ${formatDate(commitDate(comparison.baseCommit))} and ${formatDate(commitDate(comparison.headCommit))}`;
+  }
+
+  function validateComparisonRefs(history, base, head) {
+    if (!base || !head) throw new Error('Choose both an earlier and later version.');
+    if (base === head) throw new Error('Choose two different versions.');
+    const baseIndex = history.findIndex(commit => commit.sha === base);
+    const headIndex = history.findIndex(commit => commit.sha === head);
+    if (baseIndex >= 0 && headIndex >= 0 && baseIndex < headIndex) {
+      throw new Error('The earlier version must come before the later version.');
+    }
+    return { base, head };
   }
 
   function addNoIndex(document) {
@@ -415,7 +512,8 @@
 
   function setupTabs(document, onChange) {
     const buttons = [...document.querySelectorAll('[data-diff-tab]')];
-    buttons.forEach(button => button.addEventListener('click', () => {
+    function select(name, notify = true) {
+      const button = buttons.find(item => item.dataset.diffTab === name) || buttons[0];
       buttons.forEach(item => {
         const selected = item === button;
         item.classList.toggle('active', selected);
@@ -424,8 +522,10 @@
       document.querySelectorAll('[data-diff-panel]').forEach(panel => {
         panel.hidden = panel.dataset.diffPanel !== button.dataset.diffTab;
       });
-      onChange?.();
-    }));
+      if (notify) onChange?.(button.dataset.diffTab);
+    }
+    buttons.forEach(button => button.addEventListener('click', () => select(button.dataset.diffTab)));
+    return { select };
   }
 
   function createDiffNavigator(document) {
@@ -437,6 +537,11 @@
     const next = nav.querySelector('[data-diff-next]');
     let targets = [];
     let index = -1;
+
+    function positionUnderHeader() {
+      const header = document.querySelector('.site-header');
+      nav.style.top = `${Math.max(12, (header?.getBoundingClientRect().bottom || 58) + 12)}px`;
+    }
 
     function refresh() {
       diffRoot.querySelectorAll('.diff-jump-target,.diff-jump-active').forEach(node => node.classList.remove('diff-jump-target', 'diff-jump-active'));
@@ -450,6 +555,7 @@
         targets = [...panel.querySelectorAll('.markdown-diff-line.added,.markdown-diff-line.removed')];
       }
       targets.forEach(target => target.classList.add('diff-jump-target'));
+      positionUnderHeader();
       nav.hidden = !targets.length;
       label.textContent = `${targets.length} change${targets.length === 1 ? '' : 's'}`;
     }
@@ -470,39 +576,12 @@
 
     previous.addEventListener('click', () => move(-1));
     next.addEventListener('click', () => move(1));
+    root.addEventListener('resize', positionUnderHeader);
     return { refresh, hide };
   }
 
-  function setupTokenDialog(document, onTokenSaved) {
-    const dialog = document.querySelector('[data-token-dialog]');
-    const input = dialog?.querySelector('[data-token-input]');
-    const status = dialog?.querySelector('[data-token-status]');
-    function savedToken() {
-      try { return root.localStorage.getItem(TOKEN_STORAGE_KEY) || ''; } catch { return ''; }
-    }
-    function open() {
-      if (!dialog) return;
-      input.value = savedToken();
-      if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.hidden = false;
-      input.focus();
-    }
-    document.querySelectorAll('[data-token-open]').forEach(button => button.addEventListener('click', open));
-    dialog?.querySelector('[data-token-close]')?.addEventListener('click', () => dialog.close?.());
-    dialog?.querySelector('[data-token-save]')?.addEventListener('click', () => {
-      const token = input.value.trim();
-      try {
-        if (token) root.localStorage.setItem(TOKEN_STORAGE_KEY, token);
-        else root.localStorage.removeItem(TOKEN_STORAGE_KEY);
-        status.textContent = token ? 'Token saved in this browser.' : 'No token was saved.';
-        onTokenSaved?.(token);
-      } catch { status.textContent = 'This browser blocked local storage.'; }
-    });
-    dialog?.querySelector('[data-token-remove]')?.addEventListener('click', () => {
-      try { root.localStorage.removeItem(TOKEN_STORAGE_KEY); } catch {}
-      input.value = '';
-      status.textContent = 'Saved token removed.';
-    });
-    return { savedToken, open };
+  function savedToken() {
+    try { return root.localStorage.getItem(TOKEN_STORAGE_KEY) || ''; } catch { return ''; }
   }
 
   function init() {
@@ -527,11 +606,6 @@
       root.history.replaceState(null, '', `/${root.location.search}${root.location.hash}`);
     }
     if (root.location.hostname === PRODUCTION_SHORTCUT) addNoIndex(document);
-    const tokenUi = setupTokenDialog(document, () => {
-      const retryActions = document.querySelector('[data-rate-actions]');
-      const retryForm = document.querySelector('[data-diff-form]');
-      if (retryForm && retryActions && !retryActions.hidden) retryForm.requestSubmit();
-    });
     if (context.mode !== 'diff' && context.mode !== 'error') return;
 
     const marketing = document.querySelector('[data-marketing-root]');
@@ -548,62 +622,216 @@
     const status = diffPage.querySelector('[data-compare-status]');
     const results = diffPage.querySelector('[data-compare-results]');
     const intro = diffPage.querySelector('[data-diff-intro]');
-    const rateActions = diffPage.querySelector('[data-rate-actions]');
     const navigator = createDiffNavigator(document);
-    setupTabs(document, navigator.refresh);
+    let currentInfo = null;
+    let currentHistory = [];
+    let currentComparison = null;
+    let currentView = context.view || 'visual';
+    let historyPage = 1;
+    let historyHasMore = false;
+    let initialRequest = true;
+    let retryAfterTokenChange = null;
+
+    function exactRefs() {
+      if (!currentComparison?.headCommit) return null;
+      return {
+        base: currentComparison.baseCommit?.sha || null,
+        head: currentComparison.headCommit.sha
+      };
+    }
+
+    function syncViewUrl() {
+      const refs = exactRefs();
+      if (!refs || !currentInfo) return;
+      const url = viewUrlForState(root.location.href, currentInfo.publicUrl, refs, currentView);
+      root.history.replaceState(null, '', url);
+    }
+
+    async function copyViewUrl(button) {
+      syncViewUrl();
+      const shareStatus = results.querySelector('[data-share-status]');
+      try {
+        if (root.navigator?.clipboard?.writeText) await root.navigator.clipboard.writeText(root.location.href);
+        else {
+          const temporary = document.createElement('textarea');
+          temporary.value = root.location.href;
+          temporary.setAttribute('readonly', '');
+          temporary.style.position = 'fixed';
+          temporary.style.opacity = '0';
+          document.body.appendChild(temporary);
+          temporary.select();
+          if (!document.execCommand('copy')) throw new Error('Copy was unavailable.');
+          temporary.remove();
+        }
+        if (shareStatus) shareStatus.textContent = 'Link copied. It includes both versions and the selected view.';
+        if (button) button.textContent = 'Copied';
+        root.setTimeout(() => { if (button) button.textContent = 'Copy link to this view'; }, 1600);
+      } catch {
+        if (shareStatus) shareStatus.textContent = 'Copy the URL from your browser address bar; it is already updated.';
+      }
+    }
+
+    function reportApiError(error, retry) {
+      setStatus(status, error.message || 'The comparison could not be loaded.', 'error');
+      if (error.rateLimited || error.status === 401) {
+        retryAfterTokenChange = retry;
+        document.dispatchEvent(new root.CustomEvent('github-token-required', {
+          detail: { message: error.message, resetAt: error.resetAt, invalid: error.status === 401 }
+        }));
+      }
+    }
+
+    const tabs = setupTabs(document, view => {
+      currentView = view;
+      syncViewUrl();
+      navigator.refresh();
+    });
+
+    document.addEventListener('github-token-changed', event => {
+      if (!retryAfterTokenChange || !event.detail?.hasToken) return;
+      const retry = retryAfterTokenChange;
+      retryAfterTokenChange = null;
+      retry();
+    });
 
     if (context.targetUrl) input.value = context.targetUrl;
     if (context.error) setStatus(status, context.error.message, 'error');
 
-    form.addEventListener('submit', async event => {
-      event.preventDefault();
-      rateActions.hidden = true;
+    function renderComparison(comparison) {
+      currentComparison = comparison;
+      const info = comparison.info;
+      const parts = root.Diff.diffLines(comparison.before, comparison.after);
+      const counts = countChangedLines(parts);
+      const headRef = comparison.headCommit.sha;
+      const baseRef = comparison.baseCommit?.sha || '';
+      const title = extractTitle(comparison.after, info.path.split('/').pop().replace(/\.md$/i, ''));
+
+      document.title = `${title} — Microsoft Docs X-Ray`;
+      setCanonical(document, info.publicUrl);
+      diffPage.querySelector('[data-result-title]').textContent = title;
+      diffPage.querySelector('[data-result-source]').textContent = info.sourceLabel;
+      diffPage.querySelector('[data-result-path]').textContent = info.path;
+      diffPage.querySelector('[data-result-stats]').textContent = `+${counts.additions} / −${counts.deletions} lines ${comparisonDescription(comparison, currentHistory)}`;
+      diffPage.querySelector('[data-result-learn]').href = info.publicUrl;
+      diffPage.querySelector('[data-result-github]').href = githubFileUrl(info, headRef);
+      diffPage.querySelector('[data-result-history]').href = info.historyUrl;
+      const explorer = diffPage.querySelector('[data-version-explorer]');
+      explorer.innerHTML = historyExplorer(currentHistory, comparison, historyHasMore);
+      setHistorySelections(explorer, comparison);
+      diffPage.querySelector('[data-visual-diff]').innerHTML = renderVisualDiff(comparison.before, comparison.after, info, baseRef, headRef);
+      diffPage.querySelector('[data-markdown-diff]').innerHTML = renderMarkdownDiff(comparison.before, comparison.after, info, baseRef, headRef);
+      intro.hidden = true;
+      results.hidden = false;
+      retryAfterTokenChange = null;
+      setStatus(status, '', '');
+      syncViewUrl();
+      tabs.select(currentView, false);
+      navigator.refresh();
+    }
+
+    async function compareRefs(refs) {
+      if (!currentInfo) return;
+      navigator.hide();
+      setStatus(status, 'Loading the selected versions from GitHub…', 'loading');
+      results.querySelectorAll('button,select').forEach(control => { control.disabled = true; });
+      try {
+        const comparison = await loadComparison(currentInfo, savedToken(), refs, currentHistory);
+        renderComparison(comparison);
+      } catch (error) {
+        reportApiError(error, () => compareRefs(refs));
+        results.querySelectorAll('button,select').forEach(control => { control.disabled = false; });
+      }
+    }
+
+    results.addEventListener('click', async event => {
+      const button = event.target.closest('button');
+      if (!button || !currentComparison) return;
+      if (button.matches('[data-share-view]')) {
+        await copyViewUrl(button);
+        return;
+      }
+      if (button.matches('[data-compare-latest]')) {
+        if (currentHistory.length < 2) return;
+        compareRefs({ base: currentHistory[1].sha, head: currentHistory[0].sha });
+        return;
+      }
+      if (button.matches('[data-history-from]')) {
+        if (currentHistory.length < 2) return;
+        const selected = button.dataset.historyFrom;
+        const refs = selected === currentHistory[0].sha
+          ? { base: currentHistory[1].sha, head: currentHistory[0].sha }
+          : { base: selected, head: currentHistory[0].sha };
+        compareRefs(refs);
+        return;
+      }
+      if (button.matches('[data-compare-selected]')) {
+        const controls = button.closest('.advanced-comparison');
+        const errorOutput = controls.querySelector('[data-comparison-error]');
+        try {
+          const refs = validateComparisonRefs(
+            currentHistory,
+            controls.querySelector('[data-comparison-base]').value,
+            controls.querySelector('[data-comparison-head]').value
+          );
+          errorOutput.textContent = '';
+          compareRefs(refs);
+        } catch (error) { errorOutput.textContent = error.message; }
+        return;
+      }
+      if (button.matches('[data-load-older]')) {
+        button.disabled = true;
+        button.textContent = 'Loading older versions…';
+        try {
+          const older = await loadHistory(currentInfo, savedToken(), historyPage + 1);
+          historyPage += 1;
+          const known = new Set(currentHistory.map(commit => commit.sha));
+          currentHistory.push(...older.filter(commit => !known.has(commit.sha)));
+          historyHasMore = older.length === HISTORY_PAGE_SIZE;
+          const explorer = diffPage.querySelector('[data-version-explorer]');
+          explorer.innerHTML = historyExplorer(currentHistory, currentComparison, historyHasMore);
+          setHistorySelections(explorer, currentComparison);
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Load older versions';
+          reportApiError(error, () => button.click());
+        }
+      }
+    });
+
+    async function loadArticle(value, requestedRefs) {
       results.hidden = true;
       navigator.hide();
       submit.disabled = true;
-      submit.textContent = 'Comparing…';
-      setStatus(status, 'Finding the source file and its latest revisions on GitHub…', 'loading');
+      submit.textContent = 'Loading history…';
+      setStatus(status, 'Finding the source file and its version history on GitHub…', 'loading');
       try {
-        const value = input.value.trim();
         if (root.location.hostname === PRODUCTION_SHORTCUT && context.targetUrl && value !== context.targetUrl) {
           root.location.assign(shortcutUrlForLearnUrl(value));
           return;
         }
-        const info = siteUrlToRepoInfo(value);
-        const comparison = await loadComparison(info, tokenUi.savedToken(), context.refs);
-        const parts = root.Diff.diffLines(comparison.before, comparison.after);
-        const counts = countChangedLines(parts);
-        const headRef = comparison.headCommit.sha;
-        const baseRef = comparison.baseCommit?.sha || '';
-        const title = extractTitle(comparison.after, info.path.split('/').pop().replace(/\.md$/i, ''));
-
-        document.title = `${title} — MicrosoftX diff`;
-        setCanonical(document, info.publicUrl);
-        diffPage.querySelector('[data-result-title]').textContent = title;
-        diffPage.querySelector('[data-result-source]').textContent = info.sourceLabel;
-        diffPage.querySelector('[data-result-path]').textContent = info.path;
-        diffPage.querySelector('[data-result-stats]').textContent = `+${counts.additions} / −${counts.deletions} lines in the latest change`;
-        const learnLink = diffPage.querySelector('[data-result-learn]');
-        learnLink.href = info.publicUrl;
-        const githubLink = diffPage.querySelector('[data-result-github]');
-        githubLink.href = githubFileUrl(info, headRef);
-        const historyLink = diffPage.querySelector('[data-result-history]');
-        historyLink.href = info.historyUrl;
-        diffPage.querySelector('[data-result-revisions]').innerHTML = commitCard(comparison.baseCommit, 'Before') + commitCard(comparison.headCommit, 'After');
-        diffPage.querySelector('[data-visual-diff]').innerHTML = renderVisualDiff(comparison.before, comparison.after, info, baseRef, headRef);
-        diffPage.querySelector('[data-markdown-diff]').innerHTML = renderMarkdownDiff(comparison.before, comparison.after, info, baseRef, headRef);
-        intro.hidden = true;
-        results.hidden = false;
-        setStatus(status, '', '');
-        navigator.refresh();
+        currentInfo = siteUrlToRepoInfo(value);
+        historyPage = 1;
+        currentHistory = await loadHistory(currentInfo, savedToken());
+        if (!currentHistory.length) {
+          throw new Error(`No file history was found at ${currentInfo.path}. The Learn page may use a nonstandard source path.`);
+        }
+        historyHasMore = currentHistory.length === HISTORY_PAGE_SIZE;
+        const comparison = await loadComparison(currentInfo, savedToken(), requestedRefs, currentHistory);
+        renderComparison(comparison);
       } catch (error) {
         intro.hidden = false;
-        setStatus(status, error.message || 'The comparison could not be loaded.', 'error');
-        if (error.rateLimited || error.status === 401) rateActions.hidden = false;
+        reportApiError(error, () => loadArticle(value, requestedRefs));
       } finally {
         submit.disabled = false;
-        submit.textContent = 'Compare latest change';
+        submit.textContent = 'Load version history';
       }
+    }
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const requestedRefs = initialRequest ? context.refs : null;
+      initialRequest = false;
+      loadArticle(input.value.trim(), requestedRefs);
     });
 
     if (context.targetUrl) form.requestSubmit();
@@ -613,7 +841,9 @@
     TOKEN_STORAGE_KEY,
     configuredSources,
     revisionRefsFromSearchParams,
+    viewFromSearchParams,
     resolveShortcutLocation,
+    viewUrlForState,
     shortcutUrlForLearnUrl,
     siteUrlToRepoInfo,
     githubFileUrl,
@@ -627,7 +857,9 @@
     renderVisualDiff,
     renderMarkdownDiff,
     request,
+    loadHistory,
     loadComparison,
+    validateComparisonRefs,
     init
   };
 

@@ -1,8 +1,9 @@
-# MicrosoftX logo
+# Microsoft Docs X-Ray logo
 
 The selected mark is the split-document X: two versions fold toward each other,
-with the negative space forming the product initial. The cyan/orange split makes
-the compare-and-change idea legible without relying on text.
+with the negative space forming the product initial. It now represents X-ray
+vision into documentation history. The cyan/orange split makes the
+compare-and-change idea legible without relying on text.
 
 ## Exports
 
@@ -11,6 +12,14 @@ the compare-and-change idea legible without relying on text.
 - `microsoftx-icon-192.png` — 192 × 192 web app icon
 - `microsoftx-icon-64.png` — 64 × 64 compact UI mark
 - `favicon-32.png` — 32 × 32 favicon
+- `microsoftx-og.png` — 1200 × 630 Open Graph and large social preview
+- `microsoftx-og.svg` — editable source for the social preview
+
+The social preview is a deterministic composition of the selected logo, product
+tagline, one-line shortcut example, Page Diff and Version Diff labels, and a
+hand-drawn arrow pointing to the added `x`. It is kept separate from the square
+logo so link previews use the recommended wide presentation without cropping
+the brand mark.
 
 The unused explorations are retained under `concepts/`: faceted prism, change
 flame, and mascot badge.

@@ -130,6 +130,6 @@ Expected results:
 - `www` and other subdomains return a `302` to exactly `https://microsoftx.com/` without the original path or query.
 - The browser loads the example diff and links to `MicrosoftDocs/entra-docs` at `docs/identity/authentication/concept-sms-voice-retirement.md`.
 - `https://microsoftx.com/sitemap.xml` lists only the four apex static pages.
-- Browser developer tools show GitHub data requests going directly to `api.github.com`; no comparison data is posted to MicrosoftX.
+- Browser developer tools show GitHub data requests going directly to `api.github.com`; no comparison data is posted to Microsoft Docs X-Ray.
 
 After these checks, change the wildcard redirect from `302` to `301` and submit the apex sitemap to the desired search-engine webmaster tools.

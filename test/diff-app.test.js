@@ -10,20 +10,25 @@ global.htmldiff = require('node-htmldiff');
 const config = require('../src/diff-config');
 const {
   revisionRefsFromSearchParams,
+  viewFromSearchParams,
   resolveShortcutLocation,
+  viewUrlForState,
   shortcutUrlForLearnUrl,
   siteUrlToRepoInfo,
   sanitizeRenderedHtml,
   renderVisualDiff,
   request,
+  loadHistory,
+  validateComparisonRefs,
   loadComparison
 } = require('../src/diff-app');
 
 test('shortcut host reconstructs the Learn URL and separates MicrosoftX revisions', () => {
-  const result = resolveShortcutLocation('https://learn.microsoftx.com/en-us/graph/api/user-get?view=graph-rest-beta&tabs=http&_mx_base=9152e77&_mx_head=4994b15#request');
+  const result = resolveShortcutLocation('https://learn.microsoftx.com/en-us/graph/api/user-get?view=graph-rest-beta&tabs=http&_mx_base=9152e77&_mx_head=4994b15&_mx_view=markdown#request');
   assert.equal(result.mode, 'diff');
   assert.equal(result.targetUrl, 'https://learn.microsoft.com/en-us/graph/api/user-get?view=graph-rest-beta&tabs=http#request');
   assert.deepEqual(result.refs, { base: '9152e77', head: '4994b15' });
+  assert.equal(result.view, 'markdown');
 });
 
 test('shortcut root and apex are landing modes while unrelated hosts are rejected', () => {
@@ -50,6 +55,21 @@ test('revision parameters validate pairs and hexadecimal SHAs', () => {
   assert.throws(() => revisionRefsFromSearchParams(new URLSearchParams('_mx_base=9152e77')), /also requires/);
   assert.throws(() => revisionRefsFromSearchParams(new URLSearchParams('_mx_head=not-a-sha')), /Git commit SHAs/);
   assert.throws(() => revisionRefsFromSearchParams(new URLSearchParams('_mx_base=4994b15&_mx_head=4994b15')), /must be different/);
+});
+
+test('view state URLs preserve exact revisions, the selected tab, and local target URLs', () => {
+  assert.equal(viewFromSearchParams(new URLSearchParams('_mx_view=markdown')), 'markdown');
+  assert.equal(viewFromSearchParams(new URLSearchParams('_mx_view=unknown')), 'visual');
+  const local = new URL(viewUrlForState(
+    'http://127.0.0.1:4173/?url=https%3A%2F%2Flearn.microsoft.com%2Fold',
+    'https://learn.microsoft.com/en-us/entra/identity/example?tabs=portal',
+    { base: 'a'.repeat(40), head: 'b'.repeat(40) },
+    'markdown'
+  ));
+  assert.equal(local.searchParams.get('url'), 'https://learn.microsoft.com/en-us/entra/identity/example?tabs=portal');
+  assert.equal(local.searchParams.get('_mx_base'), 'a'.repeat(40));
+  assert.equal(local.searchParams.get('_mx_head'), 'b'.repeat(40));
+  assert.equal(local.searchParams.get('_mx_view'), 'markdown');
 });
 
 test('the supplied Entra article maps to the expected public repository path', () => {
@@ -125,6 +145,15 @@ test('visual rendering removes front matter and produces insert/delete markup', 
   assert.match(output, /<ins|<del/);
 });
 
+test('comparison picker requires chronological, distinct versions', () => {
+  const history = ['c', 'b', 'a'].map(sha => ({ sha: sha.repeat(40) }));
+  assert.deepEqual(validateComparisonRefs(history, 'a'.repeat(40), 'c'.repeat(40)), {
+    base: 'a'.repeat(40), head: 'c'.repeat(40)
+  });
+  assert.throws(() => validateComparisonRefs(history, 'c'.repeat(40), 'a'.repeat(40)), /earlier version/);
+  assert.throws(() => validateComparisonRefs(history, 'b'.repeat(40), 'b'.repeat(40)), /different versions/);
+});
+
 test('API requests block non-GitHub origins and attach tokens only to api.github.com', async () => {
   const originalFetch = global.fetch;
   let captured;
@@ -160,6 +189,26 @@ test('latest comparison loads commit history and both raw revisions', async () =
     assert.equal(result.baseCommit.sha, base);
     assert.equal(result.before, '# Before\n');
     assert.equal(result.after, '# After\n');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('history loading requests a branch-scoped, paginated file timeline', async () => {
+  const originalFetch = global.fetch;
+  let requested;
+  global.fetch = async endpoint => {
+    requested = new URL(String(endpoint));
+    return new Response(JSON.stringify([]), { status: 200 });
+  };
+  try {
+    const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/identity/example');
+    await loadHistory(info, '', 2, 100, 'feature/test');
+    assert.equal(requested.pathname.endsWith('/commits'), true);
+    assert.equal(requested.searchParams.get('path'), info.path);
+    assert.equal(requested.searchParams.get('sha'), 'feature/test');
+    assert.equal(requested.searchParams.get('per_page'), '100');
+    assert.equal(requested.searchParams.get('page'), '2');
   } finally {
     global.fetch = originalFetch;
   }

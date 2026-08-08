@@ -31,8 +31,29 @@ test('each indexed page has unique metadata, a canonical URL, and one visible do
     const document = dom.window.document;
     assert.equal(document.querySelector('link[rel="canonical"]').href, canonical);
     assert.ok(document.querySelector('meta[name="description"]').content.length > 40);
+    assert.equal(document.querySelector('meta[property="og:image"]').content, 'https://microsoftx.com/assets/branding/microsoftx-og.png');
+    assert.equal(document.querySelector('meta[property="og:image:width"]').content, '1200');
+    assert.equal(document.querySelector('meta[property="og:image:height"]').content, '630');
+    assert.ok(document.querySelector('meta[property="og:image:alt"]').content.length > 20);
+    assert.equal(document.querySelector('meta[property="og:site_name"]').content, 'Microsoft Docs X-Ray');
+    assert.equal(document.querySelector('meta[name="twitter:card"]').content, 'summary_large_image');
+    assert.equal(document.querySelector('meta[name="twitter:image"]').content, 'https://microsoftx.com/assets/branding/microsoftx-og.png');
+    assert.equal(document.querySelector('link[rel="icon"][sizes="32x32"]').getAttribute('href'), '/assets/branding/favicon-32.png');
+    assert.equal(document.querySelector('link[rel="icon"][type="image/svg+xml"]'), null);
+    const authorLink = document.querySelector('.site-nav a[href="https://merill.net"]');
+    assert.equal(authorLink.textContent, 'merill.net');
+    assert.equal(authorLink.getAttribute('target'), '_blank');
+    assert.equal(authorLink.getAttribute('rel'), 'noopener noreferrer');
+    const headerLinks = [...document.querySelectorAll('.site-nav > a')];
+    assert.deepEqual(headerLinks.slice(0, 5).map(link => link.textContent.trim()), ['Home', 'About', 'Maester.Cloud', 'Entra.News', 'merill.net']);
+    assert.equal(document.querySelector('.site-nav a[href="https://microsoftx.com/supported/"]'), null);
+    assert.equal(document.querySelector('.site-nav a[href="https://microsoftx.com/privacy/"]'), null);
+    assert.ok(document.querySelector('.footer-utility-links a[href="https://microsoftx.com/supported/"]'));
+    assert.ok(document.querySelector('.footer-utility-links a[href="https://microsoftx.com/privacy/"]'));
     assert.equal(document.querySelectorAll('#main-content').length, 1, file);
     assert.equal(document.querySelector('.independent-bar').textContent.includes('not affiliated with Microsoft'), true);
+    assert.match(document.body.textContent, /Microsoft Docs X-Ray|Docs X-Ray/);
+    assert.doesNotMatch(document.body.textContent, /MicrosoftX/);
     titles.add(document.title);
   }
   assert.equal(titles.size, pages.length);
@@ -40,21 +61,213 @@ test('each indexed page has unique metadata, a canonical URL, and one visible do
 
 test('home page contains crawlable software and FAQ structured data plus the diff shell', () => {
   const html = read('index.html');
+  const dom = new JSDOM(html);
+  const githubLink = dom.window.document.querySelector('.github-nav-link');
   assert.match(html, /schema\.org\/SoftwareApplication/);
   assert.match(html, /schema\.org\/FAQPage/);
-  assert.match(html, /Add an <span class="x-accent">x<\/span>/);
+  assert.match(html, /Add an <span class="x-accent">x<\/span>\. See what changed\./);
+  assert.doesNotMatch(html, /<h1>[^<]*Add an[\s\S]*?<br>/);
+  assert.equal(dom.window.document.querySelector('.hero-inner').children.length, 2);
   assert.match(html, /data-diff-page hidden/);
-  assert.match(html, /data-rate-actions hidden/);
+  assert.match(html, /data-github-token-drawer role="dialog" aria-modal="true"/);
+  assert.doesNotMatch(html, /data-rate-actions|<dialog/);
   assert.doesNotMatch(html, /requests remaining|of 60|data-github-rate/i);
+  assert.equal(githubLink.getAttribute('aria-label'), 'Microsoft Docs X-Ray on GitHub');
+  assert.ok(githubLink.querySelector('svg'));
+  assert.match(githubLink.querySelector('path').getAttribute('d'), /^M10\.226 17\.284/);
+  assert.equal(githubLink.textContent.trim(), '');
+});
+
+test('home page clearly animates the one-letter shortcut without a video runtime', () => {
+  const html = read('index.html');
+  const css = read('assets/site.css');
+  assert.match(html, /One letter reveals the change/);
+  assert.match(html, /class="shortcut-x">x<\/mark>/);
+  assert.match(html, /<strong>Add the x<\/strong>/);
+  assert.match(html, />Page Diff<\/span>/);
+  assert.match(html, />Version Diff<\/span>/);
+  assert.match(html, /class="x-ray-scan"/);
+  assert.doesNotMatch(html, /<video|lottie|remotion/i);
+  assert.match(css, /@keyframes shortcut-x-pop/);
+  assert.match(css, /@keyframes shortcut-arrow-draw/);
+  assert.match(css, /@keyframes shortcut-diff-reveal/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.shortcut-x \{ max-width: 1em; opacity: 1;/);
+});
+
+test('GitHub token FAQ explains anonymous and authenticated hourly limits', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const tokenQuestion = [...document.querySelectorAll('.faq details')]
+    .find(details => details.querySelector('summary').textContent === 'Do I need a GitHub token?');
+  assert.ok(tokenQuestion);
+  assert.match(tokenQuestion.textContent, /60 unauthenticated REST API requests per hour/);
+  assert.match(tokenQuestion.textContent, /5,000 requests per hour/);
+  assert.match(tokenQuestion.textContent, /shared office, school, or VPN connection/);
+  assert.equal(tokenQuestion.querySelector('a').href, 'https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api');
+});
+
+test('home page replaces How it works with every supported Learn product and path', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const cards = [...document.querySelectorAll('.product-card')];
+  const products = Object.fromEntries(cards.map(card => [
+    card.querySelector('strong').textContent,
+    card.querySelector('code').textContent
+  ]));
+  assert.equal(document.querySelector('.feature-grid'), null);
+  assert.equal(document.querySelector('.privacy-callout'), null);
+  assert.doesNotMatch(document.body.textContent, /How it works/);
+  assert.doesNotMatch(document.body.textContent, /Private by architecture/);
+  assert.equal(cards.length, 13);
+  assert.deepEqual(products, {
+    'Microsoft Entra': '/entra',
+    'Azure': '/azure',
+    'Microsoft 365': '/microsoft-365',
+    'Microsoft Intune': '/mem',
+    'Microsoft Graph': '/graph',
+    'Microsoft Fabric': '/fabric',
+    'Dynamics 365': '/dynamics365',
+    '.NET': '/dotnet',
+    'ASP.NET Core': '/aspnet/core',
+    'PowerShell': '/powershell/scripting',
+    'SQL': '/sql',
+    'Visual Studio': '/visualstudio',
+    'Windows Server': '/windows-server'
+  });
+  assert.ok(cards.every(card => card.querySelector('img[loading="lazy"][alt=""]')));
+  assert.ok(cards.every(card => card.querySelector('img').src.startsWith('https://raw.githubusercontent.com/DanielBradley1/msicons/3d57443')));
+  assert.doesNotMatch(document.body.textContent, /Product icons from MS Icons/);
+  assert.equal(document.querySelectorAll('#supported-heading').length, 1);
+});
+
+test('GitHub token settings use the Entra-style slide-over and retry flow', () => {
+  const html = read('index.html');
+  const siteCss = read('assets/site.css');
+  const siteJs = read('assets/site.js');
+  const diffJs = read('assets/diff-app.js');
+  assert.match(html, /data-github-token-open[^>]*aria-controls="github-token-drawer"[^>]*aria-expanded="false"/);
+  assert.match(html, /class="token-drawer-backdrop" data-github-token-backdrop hidden/);
+  assert.match(html, /data-github-token-drawer role="dialog" aria-modal="true"/);
+  assert.match(html, /data-github-token-alert hidden/);
+  assert.match(html, /personal-access-tokens\/new/);
+  assert.match(html, />60<[\s\S]*requests per hour[\s\S]*Anonymous · shared per IP address/);
+  assert.match(html, />5,000<[\s\S]*requests per hour[\s\S]*With your optional token/);
+  assert.match(html, /Public Repositories \(read-only\)/);
+  assert.match(html, /no access to private repositories and no write permissions/);
+  assert.match(html, /cannot change code, issues, pull requests, repository settings/);
+  assert.match(html, /<details class="token-drawer-help"><summary><span>How to create the low-privilege token<\/span><svg class="token-help-chevron"/);
+  assert.doesNotMatch(html, /<details class="token-drawer-help" open/);
+  assert.ok(html.indexOf('data-github-token-input') < html.indexOf('token-drawer-help'));
+  assert.ok(html.indexOf('token-drawer-help') < html.indexOf('data-github-token-save'));
+  assert.ok(html.indexOf('data-github-token-input') < html.indexOf('token-drawer-intro'));
+  assert.ok(html.indexOf('data-github-token-save') < html.indexOf('token-rate-summary'));
+  assert.match(html, /Add a token above to continue/);
+  assert.doesNotMatch(read('about/index.html'), /data-github-token-drawer|data-github-token-open/);
+  assert.match(siteCss, /\.github-token-drawer \{[\s\S]*position: fixed;[\s\S]*right: 0;[\s\S]*height: 100dvh;/);
+  assert.match(siteCss, /\.token-help-chevron[\s\S]*transition: transform/);
+  assert.doesNotMatch(siteCss, /\.token-privilege-callout \{[^}]*var\(--success\)/);
+  assert.match(siteCss, /@keyframes token-drawer-in/);
+  assert.match(siteJs, /GITHUB_TOKEN_STORAGE_KEY = 'microsoftx-github-token'/);
+  assert.match(siteJs, /github-token-changed/);
+  assert.match(siteJs, /github-token-required/);
+  assert.match(siteJs, /githubTokenDrawer\.scrollTop = 0/);
+  assert.match(siteJs, /data-github-token-close[^\n]*focus\(\{ preventScroll: true \}\)/);
+  assert.match(siteJs, /event\.key !== 'Tab'/);
+  assert.match(diffJs, /retryAfterTokenChange/);
+  assert.match(diffJs, /new root\.CustomEvent\('github-token-required'/);
+  assert.doesNotMatch(diffJs, /setupTokenDialog|data-token-open|data-token-dialog/);
+});
+
+test('diff navigation is centered below the sticky header', () => {
+  const html = read('index.html');
+  const siteCss = read('assets/site.css');
+  const diffJs = read('assets/diff-app.js');
+  assert.match(html, /data-diff-previous[^>]*>← Previous diff<\/button><span class="diff-navigator-label"/);
+  assert.match(html, /data-diff-next[^>]*>Next diff →<\/button>/);
+  assert.match(siteCss, /\.diff-navigator \{[\s\S]*position: fixed;[\s\S]*top: 90px;[\s\S]*left: 50%;[\s\S]*transform: translateX\(-50%\);/);
+  assert.match(diffJs, /function positionUnderHeader\(\)/);
+  assert.match(diffJs, /getBoundingClientRect\(\)\.bottom/);
+  assert.match(diffJs, /addEventListener\('resize', positionUnderHeader\)/);
+});
+
+test('diff shell provides the timeline, advanced comparison, and share state without commit identities', () => {
+  const html = read('index.html');
+  const css = read('assets/site.css');
+  const js = read('assets/diff-app.js');
+  assert.match(html, /data-version-explorer/);
+  assert.match(html, /class="diff-workspace"[\s\S]*class="diff-content"[\s\S]*class="version-sidebar"/);
+  assert.doesNotMatch(html, /data-result-revisions/);
+  assert.doesNotMatch(html, /Visual blame|data-blame-view|data-diff-tab="blame"/i);
+  assert.match(js, /Choose a point in time/);
+  assert.match(js, /Advanced: compare any two versions/);
+  assert.match(js, /Copy link to this view/);
+  assert.match(js, /viewUrlForState/);
+  assert.match(js, /_mx_view/);
+  assert.doesNotMatch(js, /version-meta|commit\.author\?\.login|commit\.commit\?\.author\?\.name|Visual blame/i);
+  assert.match(css, /\.version-timeline/);
+  assert.match(css, /\.diff-workspace \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(330px, 370px\)/);
+  assert.match(css, /\.version-sidebar \{ position: sticky;/);
+  assert.doesNotMatch(css, /\.visual-blame|\.blame-row|\.version-meta/);
 });
 
 test('About, Supported, and Privacy pages contain the promised durable content', () => {
-  assert.match(read('about/index.html'), /Why it exists/);
-  assert.match(read('about/index.html'), /Built by Merill/);
+  const aboutHtml = read('about/index.html');
+  const aboutDocument = new JSDOM(aboutHtml).window.document;
+  assert.match(aboutHtml, /Why it exists/);
+  assert.match(aboutHtml, /Built by Merill/);
+  assert.match(aboutHtml, /Explore more tools by Merill/);
+  assert.equal(aboutDocument.querySelector('.author-avatar').getAttribute('src'), '/assets/branding/merill-profile.jpeg');
+  assert.equal(aboutDocument.querySelector('.author-avatar').getAttribute('alt'), 'Merill Fernando');
+  assert.equal(fs.existsSync(path.join(dist, 'assets/branding/merill-profile.jpeg')), true);
   assert.match(read('supported/index.html'), /MicrosoftDocs\/entra-docs/);
   assert.match(read('supported/index.html'), /graph-rest-beta/);
   assert.match(read('privacy/index.html'), /api\.github\.com/);
   assert.match(read('privacy/index.html'), /localStorage/);
+});
+
+test('footer links to Merill social profiles', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const links = [...document.querySelectorAll('[data-social-links] a')];
+  assert.deepEqual(links.map(link => link.href), [
+    'https://www.youtube.com/@merillx',
+    'https://linkedin.com/in/merill',
+    'https://twitter.com/merill',
+    'https://www.tiktok.com/@merillf',
+    'https://bsky.app/profile/merill.net',
+    'https://infosec.exchange/@merill',
+    'https://github.com/merill',
+    'https://www.threads.net/@merillf'
+  ]);
+  assert.ok(links.every(link => link.target === '_blank'));
+  assert.ok(links.every(link => link.rel === 'noopener noreferrer'));
+  assert.deepEqual(links.map(link => link.getAttribute('aria-label')), ['YouTube', 'LinkedIn', 'X', 'TikTok', 'Bluesky', 'Mastodon', 'GitHub', 'Threads']);
+  assert.ok(links.every(link => link.querySelector('svg')));
+  assert.ok(links.every(link => link.textContent.trim() === ''));
+});
+
+test('footer links to Maester Cloud and GitHub Sponsors', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  assert.equal(document.querySelector('.footer-feature-heading[href="https://maester.cloud"]').textContent, 'Maester Cloud');
+  assert.equal(document.querySelector('.footer-sponsor[href="https://github.com/sponsors/merill"]').textContent.trim(), '♡ Buy me a coffee');
+  assert.ok(document.querySelector('.footer-feature-heading img[src="https://admin.news/assets/maester.png"]'));
+  const dashboard = document.querySelector('.footer-feature-visual img[src="/assets/branding/maester-cloud-drift.png"]');
+  assert.ok(dashboard);
+  assert.equal(dashboard.getAttribute('width'), '2880');
+  assert.equal(dashboard.getAttribute('height'), '1728');
+  assert.equal(document.querySelector('.footer-support'), null);
+  assert.equal(document.querySelector('.footer-community'), null);
+  assert.doesNotMatch(document.querySelector('footer').textContent, /More community projects/);
+  assert.ok(document.querySelector('.footer-utility'));
+});
+
+test('About page links through to Merill tools and projects', () => {
+  const document = new JSDOM(read('about/index.html')).window.document;
+  const tools = [...document.querySelectorAll('[data-merill-tools] a')];
+  assert.equal(tools.length, 24);
+  for (const expected of ['Maester', 'Maester Cloud', 'cmd.ms', 'Graph X-Ray', 'idPowerToys', 'Zero Trust Explorer', 'MSIdentityTools']) {
+    assert.ok(tools.some(link => link.textContent.includes(expected)), expected);
+  }
+  assert.ok(tools.every(link => link.target === '_blank'));
+  assert.ok(tools.every(link => link.rel === 'noopener noreferrer'));
+  assert.equal(document.querySelector('[data-all-tools-cta]').href, 'https://merill.net/');
 });
 
 test('sitemap contains only apex static pages and robots points to it', () => {
@@ -86,4 +299,17 @@ test('all local script, stylesheet, and icon references exist in the build', () 
       assert.equal(fs.existsSync(path.join(dist, reference.split(/[?#]/)[0])), true, `${file}: ${reference}`);
     }
   }
+});
+
+test('social preview uses a deployable 1200 by 630 PNG', () => {
+  const image = fs.readFileSync(path.join(dist, 'assets/branding/microsoftx-og.png'));
+  const source = fs.readFileSync(path.join(root, 'assets/branding/microsoftx-og.svg'), 'utf8');
+  assert.equal(image.subarray(1, 4).toString(), 'PNG');
+  assert.equal(image.readUInt32BE(16), 1200);
+  assert.equal(image.readUInt32BE(20), 630);
+  assert.match(source, />PAGE DIFF<|>Page Diff</);
+  assert.match(source, />VERSION DIFF<|>Version Diff</);
+  assert.match(source, />ADD THE X</);
+  assert.match(source, /stroke-linecap="round"/);
+  assert.equal(fs.existsSync(path.join(dist, 'favicon.svg')), false);
 });

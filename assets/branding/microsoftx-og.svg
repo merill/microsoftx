@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eef6fc"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#58c4f3"/>
+      <stop offset="1" stop-color="#f4512c"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#171717" flood-opacity=".12"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <path d="M0 0h1200v12H0z" fill="url(#accent)"/>
+  <circle cx="1100" cy="54" r="190" fill="#58c4f3" opacity=".08"/>
+  <circle cx="1108" cy="585" r="250" fill="#f4512c" opacity=".07"/>
+
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="72" y="92" fill="#0067b8" font-size="22" font-weight="600" letter-spacing="1.8">INDEPENDENT COMMUNITY TOOL</text>
+    <text x="72" y="164" fill="#171717" font-size="58" font-weight="700" letter-spacing="-1.7">Microsoft Docs</text>
+    <text x="72" y="232" fill="#171717" font-size="68" font-weight="700" letter-spacing="-2">X-Ray</text>
+    <text x="72" y="304" fill="#505050" font-size="39" font-weight="400" letter-spacing="-1">X-ray vision for Microsoft Learn.</text>
+
+    <rect x="72" y="370" width="592" height="156" rx="14" fill="#ffffff" stroke="#d1d1d1" stroke-width="2"/>
+    <rect x="94" y="390" width="112" height="30" rx="15" fill="#e5f1fb"/>
+    <text x="150" y="411" text-anchor="middle" fill="#0067b8" font-size="15" font-weight="700" letter-spacing=".6">PAGE DIFF</text>
+    <rect x="216" y="390" width="132" height="30" rx="15" fill="#fff0e8"/>
+    <text x="282" y="411" text-anchor="middle" fill="#c43e20" font-size="15" font-weight="700" letter-spacing=".6">VERSION DIFF</text>
+
+    <text x="95" y="486" fill="#171717" font-size="29" font-weight="600">learn.microsoft</text>
+    <ellipse cx="321" cy="476" rx="20" ry="22" fill="#ffb31a" opacity=".24" transform="rotate(-7 321 476)"/>
+    <path d="M302 493c12 4 27 3 39-2" fill="none" stroke="#ffb31a" stroke-width="5" stroke-linecap="round"/>
+    <text x="312" y="486" fill="#f4512c" font-size="31" font-weight="800">x</text>
+    <text x="336" y="486" fill="#171717" font-size="29" font-weight="600">.com</text>
+
+    <text x="500" y="426" text-anchor="middle" fill="#0067b8" font-size="17" font-weight="800" letter-spacing=".8">ADD THE X</text>
+    <path d="M526 437c-65-10-136-3-204 20" fill="none" stroke="#0067b8" stroke-width="4" stroke-linecap="round"/>
+    <path d="M339 446l-17 11 11 16" fill="none" stroke="#0067b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="744" y="84" width="402" height="402" rx="72" fill="#ffffff"/>
+    <image href="microsoftx-icon-512.png" x="744" y="84" width="402" height="402" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+  <text x="945" y="548" text-anchor="middle" fill="#505050" font-family="Segoe UI, Arial, sans-serif" font-size="24">Reveal the change behind the page</text>
+</svg>
