@@ -17,6 +17,8 @@ const assetVersion = crypto.createHash('sha256')
     path.join(srcDir, 'theme-bootstrap.js'),
     path.join(srcDir, 'diff-config.js'),
     path.join(srcDir, 'diff-app.js'),
+    path.join(rootDir, 'assets/branding/docs-xray-dex.png'),
+    path.join(rootDir, 'assets/branding/docs-xray-dex-compare.png'),
     path.join(rootDir, 'package-lock.json')
   ].map(file => fs.readFileSync(file)).join('\n'))
   .digest('hex')
@@ -233,25 +235,17 @@ function diffApplication() {
       <div class="diff-loading-art" aria-hidden="true">
         <div class="bot-workbench">
           <span class="bot-document bot-document-before"><i></i><i></i><i></i></span>
-          <svg class="docs-bot" viewBox="0 0 220 180" focusable="false">
-            <path class="bot-antenna" d="M110 34V18m0 0 14-9m-14 9-14-9"/>
-            <rect class="bot-head" x="54" y="35" width="112" height="88" rx="24"/>
-            <path class="bot-screen" d="M75 58h70v42H75z"/>
-            <circle class="bot-eye bot-eye-left" cx="94" cy="79" r="6"/>
-            <circle class="bot-eye bot-eye-right" cx="126" cy="79" r="6"/>
-            <path class="bot-smile" d="M97 93c8 7 18 7 26 0"/>
-            <path class="bot-arm bot-arm-left" d="M56 87 31 104l-14-7"/>
-            <path class="bot-arm bot-arm-right" d="m164 87 25 17 14-7"/>
-            <path class="bot-base" d="M82 123v18m56-18v18M69 142h82"/>
-          </svg>
+          <span class="docs-bot">
+            <img class="docs-bot-frame docs-bot-idle" src="${versionedAsset('/assets/branding/docs-xray-dex.png')}" width="640" height="640" alt="">
+            <img class="docs-bot-frame docs-bot-compare" src="${versionedAsset('/assets/branding/docs-xray-dex-compare.png')}" width="640" height="640" alt="">
+          </span>
           <span class="bot-document bot-document-after"><i></i><i></i><i></i></span>
-          <span class="bot-packet bot-packet-one">−</span><span class="bot-packet bot-packet-two">+</span>
           <span class="bot-scan"></span>
         </div>
       </div>
       <div class="diff-loading-content">
-        <span class="eyebrow">GitHub comparison in progress</span>
-        <h2 id="diff-loading-title" data-loading-title>Docs bots are finding the source.</h2>
+        <span class="eyebrow">Comparison in progress</span>
+        <h2 id="diff-loading-title" data-loading-title>Dex is tracing the source.</h2>
         <p data-loading-message>Matching this Microsoft Learn address to its public documentation repository.</p>
         <div class="diff-loading-progress" data-loading-progress role="progressbar" aria-label="Comparison progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12" aria-valuetext="Mapping the documentation page"><span></span></div>
         <ol class="diff-loading-steps" aria-label="Comparison steps">
@@ -260,7 +254,7 @@ function diffApplication() {
           <li data-loading-phase="revisions"><span></span>Fetch versions</li>
           <li data-loading-phase="rendering"><span></span>Build diff</li>
         </ol>
-        <p class="diff-loading-note">Everything happens in this browser. Larger pages and shared GitHub rate limits can take a little longer.</p>
+        <p class="diff-loading-note">Everything happens in this browser. Larger pages and shared API limits can take a little longer.</p>
       </div>
     </section>
     <aside class="diff-intro" data-diff-intro><strong>Supported Microsoft Learn areas</strong><p>Entra, Azure, Microsoft Graph, .NET, PowerShell, Microsoft 365, Intune, Fabric, Dynamics 365, SQL, Visual Studio, ASP.NET Core, and Windows Server.</p><a href="/supported/">View mappings and limitations</a></aside>
@@ -437,6 +431,8 @@ function build() {
   copy(path.join(rootDir, 'assets/branding/microsoftx-icon-512.png'), 'assets/branding/microsoftx-icon-512.png');
   copy(path.join(rootDir, 'assets/branding/microsoftx-logo.png'), 'assets/branding/microsoftx-logo.png');
   copy(path.join(rootDir, 'assets/branding/microsoftx-og.png'), 'assets/branding/microsoftx-og.png');
+  copy(path.join(rootDir, 'assets/branding/docs-xray-dex.png'), 'assets/branding/docs-xray-dex.png');
+  copy(path.join(rootDir, 'assets/branding/docs-xray-dex-compare.png'), 'assets/branding/docs-xray-dex-compare.png');
   copy(path.join(rootDir, 'assets/branding/merill-profile.jpeg'), 'assets/branding/merill-profile.jpeg');
   copy(path.join(rootDir, 'assets/branding/maester-cloud-drift.png'), 'assets/branding/maester-cloud-drift.png');
   copy(path.join(rootDir, 'assets/icons/microsoft.svg'), 'assets/icons/microsoft.svg');

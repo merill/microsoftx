@@ -225,12 +225,24 @@ test('diff shell includes an accessible animated GitHub loading workspace', () =
   const loading = document.querySelector('[data-diff-loading]');
   assert.ok(loading);
   assert.equal(loading.hidden, true);
-  assert.ok(loading.querySelector('.docs-bot'));
+  const mascot = loading.querySelector('.docs-bot');
+  assert.ok(mascot);
+  const mascotFrames = [...mascot.querySelectorAll('img.docs-bot-frame')];
+  assert.equal(mascotFrames.length, 2);
+  assert.match(mascotFrames[0].getAttribute('src'), /^\/assets\/branding\/docs-xray-dex\.png\?v=[a-f0-9]{12}$/);
+  assert.match(mascotFrames[1].getAttribute('src'), /^\/assets\/branding\/docs-xray-dex-compare\.png\?v=[a-f0-9]{12}$/);
+  assert.ok(mascotFrames.every(frame => frame.getAttribute('alt') === ''));
+  assert.equal(fs.existsSync(path.join(dist, 'assets/branding/docs-xray-dex.png')), true);
+  assert.equal(fs.existsSync(path.join(dist, 'assets/branding/docs-xray-dex-compare.png')), true);
+  assert.match(loading.textContent, /Comparison in progress/);
+  assert.doesNotMatch(loading.textContent, /GitHub/i);
+  assert.doesNotMatch(loading.innerHTML, /bot-head|bot-antenna|bot-arm|bot-base|bot-packet/);
   assert.equal(loading.querySelectorAll('[data-loading-phase]').length, 4);
   const progress = loading.querySelector('[role="progressbar"]');
   assert.equal(progress.getAttribute('aria-valuemin'), '0');
   assert.equal(progress.getAttribute('aria-valuemax'), '100');
   assert.match(read('assets/site.css'), /@keyframes docs-bot-float/);
+  assert.match(read('assets/site.css'), /@keyframes dex-compare-pose/);
   assert.match(read('assets/site.css'), /\.diff-page\.is-loading \.diff-hero/);
   assert.match(read('assets/diff-app.js'), /MINIMUM_LOADING_DURATION = 2000/);
   assert.match(read('assets/diff-app.js'), /await waitForMinimumLoading\(loadingStartedAt\)/);
@@ -267,7 +279,7 @@ test('diff shell provides the timeline, advanced comparison, and share state wit
   assert.match(css, /\.version-timeline/);
   assert.match(css, /\.diff-workspace \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(330px, 370px\)/);
   assert.match(css, /\.version-sidebar \{ position: sticky;/);
-  assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*\.version-sidebar \{ order: 0; \}/);
+  assert.match(css, /@media \(max-width: 1100px\) \{[\s\S]*\.version-sidebar \{ position: static; order: 0;/);
   assert.doesNotMatch(css, /\.visual-blame|\.blame-row|\.version-meta/);
 });
 

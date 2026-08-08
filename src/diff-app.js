@@ -10,10 +10,10 @@
   const MINIMUM_LOADING_DURATION = 2000;
   const VIEW_NAMES = new Set(['visual', 'markdown']);
   const LOADING_PHASES = Object.freeze({
-    mapping: { progress: 12, title: 'Docs bots are finding the source.', message: 'Matching this Microsoft Learn address to its public documentation repository.', aria: 'Mapping the documentation page' },
-    history: { progress: 38, title: 'Reading the page’s GitHub history.', message: 'Finding the commits that changed this documentation file.', aria: 'Reading the GitHub file history' },
-    revisions: { progress: 72, title: 'Fetching both document versions.', message: 'Loading the before and after Markdown directly from GitHub.', aria: 'Fetching both documentation versions' },
-    rendering: { progress: 94, title: 'Building your X-ray view.', message: 'Sanitizing the Markdown and calculating the visual and source diffs in this browser.', aria: 'Rendering the page comparison' }
+    mapping: { progress: 12, title: 'Dex is tracing the source.', message: 'Matching this Microsoft Learn address to its public documentation repository.', aria: 'Mapping the documentation page' },
+    history: { progress: 38, title: 'Dex is reading the page history.', message: 'Finding the revisions that changed this documentation page.', aria: 'Reading the documentation history' },
+    revisions: { progress: 72, title: 'Dex is fetching both versions.', message: 'Loading the before and after versions of the page.', aria: 'Fetching both documentation versions' },
+    rendering: { progress: 94, title: 'Dex is building your X-ray view.', message: 'Sanitizing the Markdown and calculating the visual and source diffs in this browser.', aria: 'Rendering the page comparison' }
   });
   const ROOT_PATHS = new Set(['/', '/index.html']);
   const LANDING_PATHS = new Set(['/', '/index.html', '/about', '/about/', '/supported', '/supported/', '/privacy', '/privacy/']);

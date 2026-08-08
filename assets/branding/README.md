@@ -14,6 +14,8 @@ compare-and-change idea legible without relying on text.
 - `favicon-32.png` — 32 × 32 favicon
 - `microsoftx-og.png` — 1200 × 630 Open Graph and large social preview
 - `microsoftx-og.svg` — editable source for the social preview
+- `docs-xray-dex.png` — 640 × 640 transparent loading-animation mascot
+- `docs-xray-dex-compare.png` — 640 × 640 transparent active comparison pose
 
 The social preview is a deterministic composition of the selected logo, product
 tagline, one-line shortcut example, Page Diff and Version Diff labels, and a
@@ -23,6 +25,12 @@ the brand mark.
 
 The unused explorations are retained under `concepts/`: faceted prism, change
 flame, and mascot badge.
+
+The loading mascot is **Dex** (docs + diff + X), an original hovering inspection
+droid with a glass X-ray visor and a cyan/orange split-document chest core. Its
+two transparent frames alternate between an idle pose and open hands reaching
+toward the before/after pages. The surrounding document bobbing and scan
+animations remain code-driven.
 
 ## Generation provenance
 
