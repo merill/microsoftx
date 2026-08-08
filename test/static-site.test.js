@@ -46,8 +46,8 @@ test('each indexed page has unique metadata, a canonical URL, and one visible do
     assert.equal(authorLink.getAttribute('target'), '_blank');
     assert.equal(authorLink.getAttribute('rel'), 'noopener noreferrer');
     const headerLinks = [...document.querySelectorAll('.site-nav > a')];
-    assert.deepEqual(headerLinks.slice(0, 5).map(link => link.textContent.trim()), ['Home', 'About', 'Maester.Cloud', 'Entra.News', 'merill.net']);
-    assert.equal(document.querySelector('.site-nav a[href="/"]').textContent, 'Home');
+    assert.deepEqual(headerLinks.slice(0, 4).map(link => link.textContent.trim()), ['About', 'Maester.Cloud', 'Entra.News', 'merill.net']);
+    assert.equal(document.querySelector('.site-nav a[href="/"]'), null);
     assert.equal(document.querySelector('.site-nav a[href="/about/"]').textContent, 'About');
     assert.ok(document.querySelector('.footer-utility-links a[href="/supported/"]'));
     assert.ok(document.querySelector('.footer-utility-links a[href="/privacy/"]'));
@@ -120,6 +120,21 @@ test('home page offers a one-click sample diff on the active site origin', () =>
   assert.ok(sample.classList.contains('button-secondary'));
 });
 
+test('home page starts with a compact direct URL shortcut', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const marketing = document.querySelector('[data-marketing-root]');
+  const shortcut = marketing.querySelector('.home-quick-compare');
+  assert.ok(shortcut);
+  assert.equal(shortcut.nextElementSibling.className, 'hero');
+  assert.equal(shortcut.querySelector('input').placeholder, 'Paste a Microsoft Learn URL');
+  assert.equal(shortcut.querySelector('button').textContent, 'View diff');
+  assert.equal(marketing.querySelectorAll('[data-home-url-form]').length, 2);
+  assert.match(read('assets/diff-app.js'), /querySelectorAll\('\[data-home-url-form\]'\)\.forEach/);
+  assert.match(read('assets/site.css'), /\.home-quick-compare form \{[^}]*padding: \.35rem 0;/);
+  assert.match(read('assets/site.css'), /\.home-quick-compare \.url-form input \{[^}]*min-height: 36px;/);
+  assert.match(read('assets/site.css'), /\.home-quick-compare \{[^}]*position: sticky;[^}]*z-index: 45;[^}]*top: 58px;/);
+});
+
 test('GitHub token FAQ explains anonymous and authenticated hourly limits', () => {
   const document = new JSDOM(read('index.html')).window.document;
   const tokenQuestion = [...document.querySelectorAll('.faq details')]
@@ -131,9 +146,21 @@ test('GitHub token FAQ explains anonymous and authenticated hourly limits', () =
   assert.equal(tokenQuestion.querySelector('a').href, 'https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api');
 });
 
+test('FAQ provides the alternative site URL', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const question = [...document.querySelectorAll('.faq details')]
+    .find(details => details.querySelector('summary').textContent.includes('microsoftx.com URL'));
+  assert.ok(question);
+  const alternative = question.querySelector('a');
+  assert.equal(alternative.getAttribute('href'), 'https://mx.merill.net/');
+  assert.equal(alternative.textContent, 'https://mx.merill.net/');
+});
+
 test('home page replaces How it works with every supported Learn product and path', () => {
   const document = new JSDOM(read('index.html')).window.document;
-  const cards = [...document.querySelectorAll('.product-card')];
+  const homeProducts = document.querySelector('[data-marketing-root] [data-supported-products]');
+  const unsupportedProducts = document.querySelector('[data-unsupported-page] [data-supported-products]');
+  const cards = [...homeProducts.querySelectorAll('.product-card')];
   const products = Object.fromEntries(cards.map(card => [
     card.querySelector('strong').textContent,
     card.querySelector('code').textContent
@@ -162,6 +189,25 @@ test('home page replaces How it works with every supported Learn product and pat
   assert.ok(cards.every(card => card.querySelector('img').src.startsWith('https://raw.githubusercontent.com/DanielBradley1/msicons/3d57443')));
   assert.doesNotMatch(document.body.textContent, /Product icons from MS Icons/);
   assert.equal(document.querySelectorAll('#supported-heading').length, 1);
+  assert.deepEqual(
+    [...unsupportedProducts.querySelectorAll('.product-card')].map(card => [card.href, card.textContent.trim()]),
+    cards.map(card => [card.href, card.textContent.trim()])
+  );
+});
+
+test('unsupported documentation has a simple reusable product view', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const page = document.querySelector('[data-unsupported-page]');
+  assert.ok(page.hidden);
+  assert.equal(page.querySelector('h1').textContent, 'Sorry, this page is not supported by Microsoft Doc X-Ray.');
+  assert.equal(page.querySelector('.unsupported-message .eyebrow'), null);
+  const homeButton = page.querySelector('.unsupported-message a.button-primary');
+  assert.equal(homeButton.getAttribute('href'), '/');
+  assert.ok(homeButton.hasAttribute('data-unsupported-back'));
+  assert.equal(homeButton.textContent, 'Go back');
+  assert.equal(page.querySelectorAll('[data-supported-products] .product-card').length, 13);
+  assert.equal(page.querySelector('header, footer'), null);
+  assert.match(read('assets/site.css'), /\.unsupported-message h1 \{[^}]*font-size: clamp\(2\.5rem, 5\.4vw, 5rem\)/);
 });
 
 test('GitHub token settings use the Entra-style slide-over and retry flow', () => {
@@ -234,6 +280,8 @@ test('diff shell includes an accessible animated GitHub loading workspace', () =
   const loading = document.querySelector('[data-diff-loading]');
   assert.ok(loading);
   assert.equal(loading.hidden, true);
+  assert.equal(loading.getAttribute('role'), 'status');
+  assert.equal(loading.getAttribute('aria-live'), 'polite');
   const mascot = loading.querySelector('.docs-bot');
   assert.ok(mascot);
   const mascotFrames = [...mascot.querySelectorAll('img.docs-bot-frame')];
@@ -252,9 +300,28 @@ test('diff shell includes an accessible animated GitHub loading workspace', () =
   assert.equal(progress.getAttribute('aria-valuemax'), '100');
   assert.match(read('assets/site.css'), /@keyframes docs-bot-float/);
   assert.match(read('assets/site.css'), /@keyframes dex-compare-pose/);
-  assert.match(read('assets/site.css'), /\.diff-page\.is-loading \.diff-hero/);
-  assert.match(read('assets/diff-app.js'), /MINIMUM_LOADING_DURATION = 2000/);
-  assert.match(read('assets/diff-app.js'), /await waitForMinimumLoading\(loadingStartedAt\)/);
+  assert.match(read('assets/site.css'), /\.diff-loading \{[\s\S]*position: fixed;[\s\S]*inset: 0;[\s\S]*backdrop-filter: blur\(6px\)/);
+  assert.match(read('assets/site.css'), /\.diff-loading-panel \{[\s\S]*width: min\(1040px, calc\(100vw - 2rem\)\);[\s\S]*border-radius: 16px;/);
+  assert.match(read('assets/site.css'), /body\.diff-loading-open \{ overflow: hidden; \}/);
+  assert.doesNotMatch(read('assets/site.css'), /\.diff-page\.is-loading \.diff-hero/);
+  const diffJs = read('assets/diff-app.js');
+  const versionSwitchFlow = diffJs.match(/async function compareRefs\(refs\) \{[\s\S]*?results\.addEventListener/)?.[0] || '';
+  assert.doesNotMatch(versionSwitchFlow, /results\.hidden = true/);
+  assert.match(diffJs, /MINIMUM_LOADING_DURATION = 2000/);
+  assert.match(diffJs, /await waitForMinimumLoading\(loadingStartedAt\)/);
+});
+
+test('missing mapped source history has a centered supported-docs action', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const page = document.querySelector('[data-missing-source-page]');
+  const css = read('assets/site.css');
+  assert.ok(page);
+  assert.equal(page.hidden, true);
+  assert.equal(page.getAttribute('role'), 'alert');
+  assert.equal(page.getAttribute('aria-live'), 'assertive');
+  assert.equal(page.querySelector('a.button-primary').getAttribute('href'), '/supported/');
+  assert.equal(page.querySelector('a.button-primary').textContent, 'View supported documentation');
+  assert.match(css, /\.missing-source-page \{[^}]*min-height: calc\(100dvh - 84px\);[^}]*place-items: center;/);
 });
 
 test('diff shell provides the timeline, advanced comparison, and share state without commit identities', () => {
@@ -331,6 +398,7 @@ test('footer links to Merill social profiles', () => {
 
 test('footer links to Maester Cloud and GitHub Sponsors', () => {
   const document = new JSDOM(read('index.html')).window.document;
+  assert.equal(document.querySelector('.footer-eyebrow').textContent, 'Sponsored by');
   assert.equal(document.querySelector('.footer-feature-heading[href="https://maester.cloud"]').textContent, 'Maester Cloud');
   assert.equal(document.querySelector('.footer-sponsor[href="https://github.com/sponsors/merill"]').textContent.trim(), '♡ Buy me a coffee');
   assert.ok(document.querySelector('.footer-feature-heading img[src="https://admin.news/assets/maester.png"]'));

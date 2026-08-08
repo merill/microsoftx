@@ -86,9 +86,35 @@ const socialProfiles = [
   ['threads', 'Threads', 'https://www.threads.net/@merillf', icons.threads]
 ];
 
+const msIconsRoot = 'https://raw.githubusercontent.com/DanielBradley1/msicons/3d57443ed4445be9465ee2fee6a6ce6fd02cf90c/msicons/public/icons';
+const productDefinitions = [
+  ['Microsoft Entra', '/entra', 'entra/Microsoft Entra Product Family.svg'],
+  ['Azure', '/azure', 'other/10018-icon-service-Azure-A.svg'],
+  ['Microsoft 365', '/microsoft-365', 'Microsoft/dark-blue-Apps.svg'],
+  ['Microsoft Intune', '/mem', 'intune/Microsoft-intune.svg'],
+  ['Microsoft Graph', '/graph', 'Microsoft/light-blue-Organization Horizontal.svg'],
+  ['Microsoft Fabric', '/fabric', 'fabric/fabric_color.svg'],
+  ['Dynamics 365', '/dynamics365', 'dynamics-365/Dynamics365_scalable.svg'],
+  ['.NET', '/dotnet', 'Microsoft/light-blue-Code.svg'],
+  ['ASP.NET Core', '/aspnet/core', 'app-services/10035-icon-service-App-Services.svg'],
+  ['PowerShell', '/powershell/scripting', 'general/10825-icon-service-Powershell.svg'],
+  ['SQL', '/sql', 'databases/10132-icon-service-SQL-Server.svg'],
+  ['Visual Studio', '/visualstudio', 'Microsoft/light-blue-Window Dev Edit.svg'],
+  ['Windows Server', '/windows-server', 'general/10835-icon-service-Server-Farm.svg']
+];
+
+function supportedProductsComponent({ headingId, className = 'section supported-products-section' }) {
+  const configuredLabels = new Set(config.sources.map(source => source.label));
+  const products = productDefinitions.filter(([label]) => configuredLabels.has(label));
+  const productCards = products.map(([label, learnPath, iconPath]) => {
+    const iconUrl = `${msIconsRoot}/${iconPath.split('/').map(encodeURIComponent).join('/')}`;
+    return `<a class="product-card" href="https://learn.microsoft.com${learnPath}/" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)} documentation on Microsoft Learn"><span class="product-icon" aria-hidden="true"><img src="${iconUrl}" alt="" width="48" height="48" loading="lazy"></span><span class="product-details"><strong>${escapeHtml(label)}</strong><code>${escapeHtml(learnPath)}</code></span></a>`;
+  }).join('');
+  return `<section class="${className}" data-supported-products aria-labelledby="${headingId}"><div class="section-heading"><span class="eyebrow">Supported documentation</span><h2 id="${headingId}">Microsoft Learn areas with X-ray vision.</h2><p>${products.length} product areas are mapped to their public documentation source.</p></div><div class="product-grid">${productCards}</div><div class="product-grid-footer"><a href="/supported/">Mapping details and limitations →</a></div></section>`;
+}
+
 function navigation(current) {
   const links = [
-    ['home', '/', 'Home'],
     ['about', '/about/', 'About']
   ];
   return `<nav class="site-nav" data-site-nav aria-label="Primary navigation">
@@ -120,7 +146,7 @@ function footer() {
   return `<footer class="site-footer" id="site-footer">
     <div class="footer-showcase">
       <section class="footer-feature">
-        <div class="footer-feature-copy"><span class="footer-eyebrow">Featured project</span>
+        <div class="footer-feature-copy"><span class="footer-eyebrow">Sponsored by</span>
           <a class="footer-feature-heading" href="https://maester.cloud" target="_blank" rel="noopener noreferrer"><img src="https://admin.news/assets/maester.png" width="85" height="85" loading="lazy" alt=""><span>Maester Cloud</span></a>
           <p>Everyone loves using Maester to track their Microsoft Entra and Microsoft 365 tenant security configuration. Maester Cloud turns those daily results into a continuous security record, with 5+ years of history, drift detection, and alerts when your posture changes.</p>
           <a class="footer-cta" href="https://maester.cloud" target="_blank" rel="noopener noreferrer">Explore Maester Cloud <span aria-hidden="true">→</span></a>
@@ -231,30 +257,38 @@ function diffApplication() {
         <div class="compare-status" data-compare-status role="status" aria-live="polite" hidden></div>
       </form>
     </section>
-    <section class="diff-loading" data-diff-loading data-loading-state="mapping" aria-labelledby="diff-loading-title" hidden>
-      <div class="diff-loading-art" aria-hidden="true">
-        <div class="bot-workbench">
-          <span class="bot-document bot-document-before"><i></i><i></i><i></i></span>
-          <span class="docs-bot">
-            <img class="docs-bot-frame docs-bot-idle" src="${versionedAsset('/assets/branding/docs-xray-dex.png')}" width="640" height="640" alt="">
-            <img class="docs-bot-frame docs-bot-compare" src="${versionedAsset('/assets/branding/docs-xray-dex-compare.png')}" width="640" height="640" alt="">
-          </span>
-          <span class="bot-document bot-document-after"><i></i><i></i><i></i></span>
-          <span class="bot-scan"></span>
+    <section class="diff-loading" data-diff-loading data-loading-state="mapping" role="status" aria-live="polite" aria-atomic="true" aria-labelledby="diff-loading-title" hidden>
+      <div class="diff-loading-panel">
+        <div class="diff-loading-art" aria-hidden="true">
+          <div class="bot-workbench">
+            <span class="bot-document bot-document-before"><i></i><i></i><i></i></span>
+            <span class="docs-bot">
+              <img class="docs-bot-frame docs-bot-idle" src="${versionedAsset('/assets/branding/docs-xray-dex.png')}" width="640" height="640" alt="">
+              <img class="docs-bot-frame docs-bot-compare" src="${versionedAsset('/assets/branding/docs-xray-dex-compare.png')}" width="640" height="640" alt="">
+            </span>
+            <span class="bot-document bot-document-after"><i></i><i></i><i></i></span>
+            <span class="bot-scan"></span>
+          </div>
+        </div>
+        <div class="diff-loading-content">
+          <span class="eyebrow">Comparison in progress</span>
+          <h2 id="diff-loading-title" data-loading-title>Dex is tracing the source.</h2>
+          <p data-loading-message>Matching this Microsoft Learn address to its public documentation repository.</p>
+          <div class="diff-loading-progress" data-loading-progress role="progressbar" aria-label="Comparison progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12" aria-valuetext="Mapping the documentation page"><span></span></div>
+          <ol class="diff-loading-steps" aria-label="Comparison steps">
+            <li data-loading-phase="mapping"><span></span>Map page</li>
+            <li data-loading-phase="history"><span></span>Read history</li>
+            <li data-loading-phase="revisions"><span></span>Fetch versions</li>
+            <li data-loading-phase="rendering"><span></span>Build diff</li>
+          </ol>
+          <p class="diff-loading-note">Everything happens in this browser. Larger pages and shared API limits can take a little longer.</p>
         </div>
       </div>
-      <div class="diff-loading-content">
-        <span class="eyebrow">Comparison in progress</span>
-        <h2 id="diff-loading-title" data-loading-title>Dex is tracing the source.</h2>
-        <p data-loading-message>Matching this Microsoft Learn address to its public documentation repository.</p>
-        <div class="diff-loading-progress" data-loading-progress role="progressbar" aria-label="Comparison progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12" aria-valuetext="Mapping the documentation page"><span></span></div>
-        <ol class="diff-loading-steps" aria-label="Comparison steps">
-          <li data-loading-phase="mapping"><span></span>Map page</li>
-          <li data-loading-phase="history"><span></span>Read history</li>
-          <li data-loading-phase="revisions"><span></span>Fetch versions</li>
-          <li data-loading-phase="rendering"><span></span>Build diff</li>
-        </ol>
-        <p class="diff-loading-note">Everything happens in this browser. Larger pages and shared API limits can take a little longer.</p>
+    </section>
+    <section class="missing-source-page" data-missing-source-page role="alert" aria-live="assertive" aria-labelledby="missing-source-message" hidden>
+      <div class="missing-source-content">
+        <h1 id="missing-source-message" data-missing-source-message>We couldn’t find this page’s public GitHub history.</h1>
+        <a class="button-primary" href="/supported/">View supported documentation</a>
       </div>
     </section>
     <aside class="diff-intro" data-diff-intro><strong>Supported Microsoft Learn areas</strong><p>Entra, Azure, Microsoft Graph, .NET, PowerShell, Microsoft 365, Intune, Fabric, Dynamics 365, SQL, Visual Studio, ASP.NET Core, and Windows Server.</p><a href="/supported/">View mappings and limitations</a></aside>
@@ -266,38 +300,28 @@ function diffApplication() {
   </main>`;
 }
 
+function unsupportedApplication() {
+  return `<main class="unsupported-page" data-unsupported-page hidden>
+    <section class="unsupported-message" aria-labelledby="unsupported-heading">
+      <h1 id="unsupported-heading">Sorry, this page is not supported by Microsoft Doc X-Ray.</h1>
+      <a class="button-primary" href="/" data-unsupported-back>Go back</a>
+    </section>
+    ${supportedProductsComponent({ headingId: 'unsupported-products-heading', className: 'unsupported-products-section' })}
+  </main>`;
+}
+
 function homePage() {
-  const msIconsRoot = 'https://raw.githubusercontent.com/DanielBradley1/msicons/3d57443ed4445be9465ee2fee6a6ce6fd02cf90c/msicons/public/icons';
-  const productDefinitions = [
-    ['Microsoft Entra', '/entra', 'entra/Microsoft Entra Product Family.svg'],
-    ['Azure', '/azure', 'other/10018-icon-service-Azure-A.svg'],
-    ['Microsoft 365', '/microsoft-365', 'Microsoft/dark-blue-Apps.svg'],
-    ['Microsoft Intune', '/mem', 'intune/Microsoft-intune.svg'],
-    ['Microsoft Graph', '/graph', 'Microsoft/light-blue-Organization Horizontal.svg'],
-    ['Microsoft Fabric', '/fabric', 'fabric/fabric_color.svg'],
-    ['Dynamics 365', '/dynamics365', 'dynamics-365/Dynamics365_scalable.svg'],
-    ['.NET', '/dotnet', 'Microsoft/light-blue-Code.svg'],
-    ['ASP.NET Core', '/aspnet/core', 'app-services/10035-icon-service-App-Services.svg'],
-    ['PowerShell', '/powershell/scripting', 'general/10825-icon-service-Powershell.svg'],
-    ['SQL', '/sql', 'databases/10132-icon-service-SQL-Server.svg'],
-    ['Visual Studio', '/visualstudio', 'Microsoft/light-blue-Window Dev Edit.svg'],
-    ['Windows Server', '/windows-server', 'general/10835-icon-service-Server-Farm.svg']
-  ];
-  const configuredLabels = new Set(config.sources.map(source => source.label));
-  const products = productDefinitions.filter(([label]) => configuredLabels.has(label));
-  const productCards = products.map(([label, learnPath, iconPath]) => {
-    const iconUrl = `${msIconsRoot}/${iconPath.split('/').map(encodeURIComponent).join('/')}`;
-    return `<a class="product-card" href="https://learn.microsoft.com${learnPath}/" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)} documentation on Microsoft Learn"><span class="product-icon" aria-hidden="true"><img src="${iconUrl}" alt="" width="48" height="48" loading="lazy"></span><span class="product-details"><strong>${escapeHtml(label)}</strong><code>${escapeHtml(learnPath)}</code></span></a>`;
-  }).join('');
   const marketing = `<main data-marketing-root id="main-content" itemscope itemtype="https://schema.org/SoftwareApplication">
     <meta itemprop="name" content="Microsoft Docs X-Ray"><meta itemprop="applicationCategory" content="DeveloperApplication"><meta itemprop="operatingSystem" content="Any modern web browser"><meta itemprop="url" content="${canonicalOrigin}/">
+    <section class="home-quick-compare" aria-label="Quick Microsoft Learn page diff"><form data-home-url-form><div class="url-form"><input name="url" type="url" required inputmode="url" autocomplete="url" aria-label="Microsoft Learn article URL" placeholder="Paste a Microsoft Learn URL"><button class="button-primary" type="submit">View diff</button></div><div class="compare-status" data-home-url-status role="status" aria-live="polite" hidden></div></form></section>
     <section class="hero"><div class="hero-inner"><span class="eyebrow">X-ray vision for Microsoft Learn</span><h1>Add an <span class="x-accent">x</span>. See what changed.</h1></div></section>
     <section class="shortcut-demo" aria-labelledby="demo-title"><div class="browser-chrome" aria-hidden="true"><span class="browser-dots"><i></i><i></i><i></i></span><div class="address-bar"><span class="address-prefix">https://learn.microsoft</span><span class="shortcut-x-slot"><mark class="shortcut-x">x</mark><span class="shortcut-pointer"><svg viewBox="0 0 150 62" focusable="false"><path d="M8 52 C50 58 96 48 136 12"></path><path d="M123 12 L137 11 L134 25"></path></svg><strong>Add the x</strong></span></span><span>.com</span><span class="address-trail">/en-us/entra/identity/...</span></div></div><div class="demo-body"><div class="demo-copy"><span class="eyebrow">The one-letter shortcut</span><h2 id="demo-title">One letter reveals the change.</h2><p>While viewing a Microsoft Learn page, add <strong>x</strong> immediately after <strong>microsoft</strong> in the address. Docs X-Ray opens the latest comparison automatically.</p><div class="shortcut-equation"><code>microsoft.com</code><span aria-hidden="true">→</span><code>microsoft<span class="x-accent">x</span>.com</code></div></div><div class="diff-preview" aria-hidden="true"><div class="diff-preview-head"><div><span class="diff-badge">Page Diff</span><span class="diff-badge diff-badge-secondary">Version Diff</span></div><strong>Latest page change</strong></div><div class="diff-preview-file">concept-sms-voice-retirement.md</div><div class="diff-preview-row diff-preview-removed"><span>−</span><code>Previous published guidance</code></div><div class="diff-preview-row diff-preview-added"><span>+</span><code>Updated guidance, revealed</code></div><div class="x-ray-scan"></div></div></div></section>
-    <section class="section supported-products-section" aria-labelledby="supported-heading"><div class="section-heading"><span class="eyebrow">Supported documentation</span><h2 id="supported-heading">Microsoft Learn areas with X-ray vision.</h2><p>${products.length} product areas are mapped to their public documentation source.</p></div><div class="product-grid">${productCards}</div><div class="product-grid-footer"><a href="/supported/">Mapping details and limitations →</a></div></section>
+    ${supportedProductsComponent({ headingId: 'supported-heading' })}
     <section class="section" id="try-it" aria-labelledby="try-heading"><div class="section-heading"><span class="eyebrow">Try it</span><h2 id="try-heading">Open a sample or use your own page.</h2><p>See a real comparison in one click, or paste any supported Microsoft Learn URL. Docs X-Ray opens the diff on whichever site domain you are currently using.</p></div><form data-home-url-form><div class="url-form"><input name="url" type="url" required inputmode="url" autocomplete="url" aria-label="Microsoft Learn article URL" placeholder="https://learn.microsoft.com/en-us/entra/identity/authentication/..."><button class="button-primary" type="submit">View latest diff</button><a class="button-secondary home-sample-button" data-home-sample-link href="/en-us/entra/identity/authentication/concept-sms-voice-retirement">View sample diff</a></div><p class="form-help">Only public, configured Microsoft Learn documentation is supported.</p><div class="compare-status" data-home-url-status role="status" aria-live="polite" hidden></div></form></section>
     <section class="section" itemscope itemtype="https://schema.org/FAQPage"><div class="section-heading"><span class="eyebrow">Frequently asked questions</span><h2>What to know before using Docs X-Ray.</h2></div><div class="faq">
       <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Is Microsoft Docs X-Ray an official Microsoft site?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">No. Microsoft Docs X-Ray is an independent community project. It links back to Microsoft Learn and the public GitHub source for every comparison.</p></div></details>
       <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Does it support every Microsoft Learn page?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Not yet. The supported list focuses on product areas with reliable public URL-to-repository mappings. Unsupported pages show a clear explanation instead of guessing.</p></div></details>
+      <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">I can’t access the microsoftx.com URL. What can I do?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">An alternative URL for this site is <a href="https://mx.merill.net/">https://mx.merill.net/</a>.</p></div></details>
       <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What revisions are compared?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">By default, Docs X-Ray compares the latest two Git commits that affected the mapped Markdown file. Use the timeline to compare any earlier version with today, or open the advanced picker to compare any two versions.</p></div></details>
       <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Do I need a GitHub token?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Usually not. GitHub allows up to <strong>60 unauthenticated REST API requests per hour</strong> from an originating IP address. Each Docs X-Ray comparison uses several requests to find the commits and load both revisions, so a shared office, school, or VPN connection can use that allowance sooner than expected.</p><p>Add an optional fine-grained personal access token to raise your authenticated allowance to <strong>5,000 requests per hour</strong>. Public documentation needs no repository permissions. The token stays in this browser and is sent only to <code>api.github.com</code>; Docs X-Ray suggests it only when GitHub reports that the anonymous limit is exhausted. <a href="https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api" target="_blank" rel="noopener noreferrer">Read GitHub’s rate-limit documentation ↗</a></p></div></details>
     </div></section>
@@ -307,7 +331,7 @@ function homePage() {
     description: 'Get X-ray vision for Microsoft Learn. Add one letter to a supported URL to reveal the latest documentation change as a visual and Markdown diff.',
     pathName: '/',
     current: 'home',
-    content: `${marketing}${diffApplication()}`,
+    content: `${marketing}${diffApplication()}${unsupportedApplication()}`,
     bodyAttributes: 'class="home-page"',
     extraScripts: `<script src="${versionedAsset('/assets/diff-config.js')}"></script><script src="${versionedAsset('/assets/vendor/marked.js')}"></script><script src="${versionedAsset('/assets/vendor/diff.min.js')}"></script><script src="${versionedAsset('/assets/vendor/htmldiff.js')}"></script><script src="${versionedAsset('/assets/diff-app.js')}"></script>`
   });

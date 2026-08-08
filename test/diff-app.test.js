@@ -18,6 +18,14 @@ const {
   prepareShortcutLanding,
   setLoadingSurface,
   remainingLoadingDuration,
+  scrollPageToTop,
+  showUnsupportedPage,
+  navigateBackOrHome,
+  restoreFromUnsupportedHistory,
+  showMissingSourcePage,
+  isUnsupportedDocumentationError,
+  isMissingSourceHistoryError,
+  historyExplorer,
   siteUrlToRepoInfo,
   sanitizeRenderedHtml,
   renderVisualDiff,
@@ -107,6 +115,8 @@ test('the comparison loader advances through meaningful GitHub phases', () => {
 
   setLoadingSurface(page, 'revisions');
   assert.ok(page.classList.contains('is-loading'));
+  assert.ok(dom.window.document.body.classList.contains('diff-loading-open'));
+  assert.equal(page.getAttribute('aria-busy'), 'true');
   assert.equal(page.dataset.loadingState, 'revisions');
   assert.equal(page.querySelector('[data-loading-progress]').getAttribute('aria-valuenow'), '72');
   assert.match(page.querySelector('[data-loading-title]').textContent, /versions/);
@@ -116,6 +126,27 @@ test('the comparison loader advances through meaningful GitHub phases', () => {
   setLoadingSurface(page, '', false);
   assert.equal(page.querySelector('[data-diff-loading]').hidden, true);
   assert.ok(!page.classList.contains('is-loading'));
+  assert.ok(!dom.window.document.body.classList.contains('diff-loading-open'));
+  assert.equal(page.hasAttribute('aria-busy'), false);
+});
+
+test('the current version shows its last-changed date in history controls', () => {
+  const current = {
+    sha: 'a'.repeat(40),
+    html_url: 'https://github.com/example/docs/commit/current',
+    commit: { author: { date: '2026-08-08T04:30:00Z' }, message: 'Current documentation update' }
+  };
+  const previous = {
+    sha: 'b'.repeat(40),
+    html_url: 'https://github.com/example/docs/commit/previous',
+    commit: { author: { date: '2026-07-01T03:00:00Z' }, message: 'Previous documentation update' }
+  };
+  const html = historyExplorer([current, previous], { headCommit: current, baseCommit: previous }, false);
+  const document = new JSDOM(html).window.document;
+  const currentDate = document.querySelector('.version-event.current .version-date').textContent;
+  const currentOption = document.querySelector('[data-comparison-head] option').textContent;
+  assert.match(currentDate, /^Current version · .*2026/);
+  assert.match(currentOption, /^Current version · .*2026.* — Current documentation update$/);
 });
 
 test('successful comparisons keep the loading animation visible for at least two seconds', () => {
@@ -124,6 +155,90 @@ test('successful comparisons keep the loading animation visible for at least two
   assert.equal(remainingLoadingDuration(1000, 2999), 1);
   assert.equal(remainingLoadingDuration(1000, 3000), 0);
   assert.equal(remainingLoadingDuration(1000, 5000), 0);
+});
+
+test('completed comparisons reset the page to the top', () => {
+  let options;
+  scrollPageToTop({ scrollTo: value => { options = value; } });
+  assert.deepEqual(options, { top: 0, left: 0, behavior: 'auto' });
+  assert.doesNotThrow(() => scrollPageToTop({}));
+});
+
+test('unsupported documentation uses a bare page without site chrome', () => {
+  const dom = new JSDOM(`<!doctype html><html><head><title>Home</title></head><body class="home-page diff-mode">
+    <a class="skip-link">Skip</a><div class="independent-bar">Notice</div><header class="site-header">Header</header>
+    <main id="main-content" data-marketing-root></main><main data-diff-page></main>
+    <main data-unsupported-page hidden><h1>Unsupported</h1></main><footer class="site-footer">Footer</footer>
+  </body></html>`);
+  let scrollOptions;
+  let pushedState;
+  const shown = showUnsupportedPage(dom.window.document, {
+    scrollTo: options => { scrollOptions = options; },
+    history: { pushState: state => { pushedState = state; } },
+    location: { href: 'https://microsoftx.com/' }
+  }, true);
+
+  assert.equal(shown, true);
+  assert.equal(dom.window.document.querySelector('[data-unsupported-page]').hidden, false);
+  assert.equal(dom.window.document.querySelector('[data-unsupported-page]').id, 'main-content');
+  assert.equal(dom.window.document.querySelector('[data-marketing-root]').hidden, true);
+  assert.equal(dom.window.document.querySelector('[data-diff-page]').hidden, true);
+  assert.equal(dom.window.document.querySelector('.skip-link, .independent-bar, .site-header, .site-footer'), null);
+  assert.ok(dom.window.document.body.classList.contains('unsupported-mode'));
+  assert.ok(!dom.window.document.body.classList.contains('diff-mode'));
+  assert.equal(dom.window.document.title, 'Unsupported documentation — Microsoft Docs X-Ray');
+  assert.match(dom.window.document.querySelector('meta[name="robots"]').content, /noindex/);
+  assert.deepEqual(scrollOptions, { top: 0, left: 0, behavior: 'auto' });
+  assert.deepEqual(pushedState, { microsoftXUnsupported: true });
+});
+
+test('unsupported navigation returns to browser history with a home fallback', () => {
+  let backed = 0;
+  assert.equal(navigateBackOrHome({ history: { length: 2, back: () => { backed += 1; } } }), 'back');
+  assert.equal(backed, 1);
+
+  let assigned;
+  assert.equal(navigateBackOrHome({
+    history: { length: 1 },
+    location: { href: 'https://microsoftx.com/unsupported', assign: value => { assigned = value; } }
+  }), 'home');
+  assert.equal(assigned, 'https://microsoftx.com/');
+});
+
+test('back navigation reloads an in-place unsupported state', () => {
+  const dom = new JSDOM('<!doctype html><body class="unsupported-mode"></body>');
+  let reloads = 0;
+  assert.equal(restoreFromUnsupportedHistory(dom.window.document, { location: { reload: () => { reloads += 1; } } }), true);
+  assert.equal(reloads, 1);
+  dom.window.document.body.classList.remove('unsupported-mode');
+  assert.equal(restoreFromUnsupportedHistory(dom.window.document, { location: { reload: () => { reloads += 1; } } }), false);
+  assert.equal(reloads, 1);
+});
+
+test('missing source history is shown as a centered page state', () => {
+  const dom = new JSDOM(`<!doctype html><html><head><title>Diff</title></head><body class="diff-mode">
+    <header class="site-header">Header</header><main id="main-content" data-diff-page>
+      <section class="diff-hero"><div data-compare-status></div></section>
+      <section data-diff-loading hidden></section>
+      <section data-missing-source-page hidden><h1 data-missing-source-message></h1></section>
+      <aside data-diff-intro></aside><article data-compare-results></article><nav data-diff-navigator></nav>
+    </main><footer class="site-footer">Footer</footer>
+  </body></html>`);
+  let scrollOptions;
+  const error = new Error('No file history was found at docs/example.md. The Learn page may use a nonstandard source path.');
+  const shown = showMissingSourcePage(dom.window.document, error, { scrollTo: options => { scrollOptions = options; } });
+
+  assert.equal(shown, true);
+  assert.equal(dom.window.document.querySelector('[data-missing-source-page]').hidden, false);
+  assert.equal(dom.window.document.querySelector('[data-missing-source-message]').textContent, error.message);
+  assert.equal(dom.window.document.querySelector('.diff-hero').hidden, true);
+  assert.equal(dom.window.document.querySelector('[data-diff-intro]').hidden, true);
+  assert.equal(dom.window.document.querySelector('[data-compare-results]').hidden, true);
+  assert.ok(dom.window.document.body.classList.contains('missing-source-mode'));
+  assert.ok(dom.window.document.querySelector('.site-header'));
+  assert.ok(dom.window.document.querySelector('.site-footer'));
+  assert.equal(dom.window.document.title, 'Page history not found — Microsoft Docs X-Ray');
+  assert.deepEqual(scrollOptions, { top: 0, left: 0, behavior: 'auto' });
 });
 
 test('revision parameters validate pairs and hexadecimal SHAs', () => {
@@ -213,7 +328,10 @@ test('query-specific Graph mappings distinguish beta and v1', () => {
 });
 
 test('unsupported hosts and encoded path separators are rejected', () => {
-  assert.throws(() => siteUrlToRepoInfo('https://example.com/en-us/entra/identity/example'), /not supported/);
+  assert.throws(
+    () => siteUrlToRepoInfo('https://example.com/en-us/entra/identity/example'),
+    error => isUnsupportedDocumentationError(error) && /not supported/.test(error.message)
+  );
   assert.throws(() => siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/identity/bad%2Fsegment'), /unsafe path segment/);
 });
 
@@ -332,6 +450,14 @@ test('latest comparison loads commit history and both raw revisions', async () =
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('an empty mapped file history is classified as a missing source path', async () => {
+  const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/identity/example');
+  await assert.rejects(
+    () => loadComparison(info, '', null, []),
+    error => isMissingSourceHistoryError(error) && error.message.includes(info.path)
+  );
 });
 
 test('history loading requests a branch-scoped, paginated file timeline', async () => {

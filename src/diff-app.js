@@ -33,6 +33,26 @@
     return Array.isArray(supplied) ? supplied : [];
   }
 
+  function unsupportedDocumentationError(message) {
+    const error = new Error(message);
+    error.code = 'UNSUPPORTED_DOCUMENTATION';
+    return error;
+  }
+
+  function isUnsupportedDocumentationError(error) {
+    return error?.code === 'UNSUPPORTED_DOCUMENTATION';
+  }
+
+  function missingSourceHistoryError(path) {
+    const error = new Error(`No file history was found at ${path}. The Learn page may use a nonstandard source path.`);
+    error.code = 'MISSING_SOURCE_HISTORY';
+    return error;
+  }
+
+  function isMissingSourceHistoryError(error) {
+    return error?.code === 'MISSING_SOURCE_HISTORY';
+  }
+
   function revisionRefsFromSearchParams(searchParams, baseName = '_mx_base', headName = '_mx_head') {
     const base = (searchParams.get(baseName) || '').trim();
     const head = (searchParams.get(headName) || '').trim();
@@ -108,10 +128,10 @@
   function diffUrlForLearnUrl(value, pageHref) {
     let input;
     try { input = new URL(String(value || '').trim()); } catch {
-      throw new Error('Enter a complete Microsoft Learn URL, including https://.');
+      throw unsupportedDocumentationError('Enter a complete Microsoft Learn URL, including https://.');
     }
     if (input.protocol !== 'https:' || input.hostname.toLowerCase() !== 'learn.microsoft.com') {
-      throw new Error('Use an https://learn.microsoft.com article URL.');
+      throw unsupportedDocumentationError('Use an https://learn.microsoft.com article URL.');
     }
     let pageUrl;
     try { pageUrl = new URL(pageHref || root.location?.href); } catch {
@@ -164,9 +184,9 @@
   function siteUrlToRepoInfo(value, sourceConfigs = configuredSources()) {
     let url;
     try { url = new URL(String(value || '').trim()); } catch {
-      throw new Error('Enter a complete Microsoft Learn URL, including https://.');
+      throw unsupportedDocumentationError('Enter a complete Microsoft Learn URL, including https://.');
     }
-    if (url.protocol !== 'https:') throw new Error('Documentation URLs must use https://.');
+    if (url.protocol !== 'https:') throw unsupportedDocumentationError('Documentation URLs must use https://.');
     const inputSegments = url.pathname.split('/').filter(Boolean).map(decodePathSegment);
     let match = null;
 
@@ -192,11 +212,11 @@
       break;
     }
 
-    if (!match) throw new Error(`This Microsoft Learn path is not supported yet: ${url.pathname}`);
+    if (!match) throw unsupportedDocumentationError(`This Microsoft Learn path is not supported yet: ${url.pathname}`);
     const { source, site, repository, articleSegments } = match;
     const finalIndex = articleSegments.length - 1;
     articleSegments[finalIndex] = articleSegments[finalIndex].replace(/\.(?:mdx?|html?)$/i, '');
-    if (!articleSegments[finalIndex]) throw new Error('Use a documentation article URL, not a section landing page.');
+    if (!articleSegments[finalIndex]) throw unsupportedDocumentationError('Use a documentation article URL, not a section landing page.');
 
     const repositoryParts = repository.pathname.split('/').filter(Boolean);
     if (repositoryParts.length !== 2) throw new Error(`The source configuration for ${source.label} has an invalid repository URL.`);
@@ -466,7 +486,7 @@
     }
 
     if (!Array.isArray(history) || !history.length) {
-      throw new Error(`No file history was found at ${info.path}. The Learn page may use a nonstandard source path.`);
+      throw missingSourceHistoryError(info.path);
     }
     const headCommit = history[0];
     const baseCommit = history[1] || null;
@@ -487,10 +507,13 @@
   function setLoadingSurface(diffPage, phase, active = true) {
     const loading = diffPage?.querySelector('[data-diff-loading]');
     if (!loading) return;
+    const body = diffPage.ownerDocument?.body;
     if (!active) {
       loading.hidden = true;
       diffPage.classList.remove('is-loading');
       diffPage.removeAttribute('data-loading-state');
+      diffPage.removeAttribute('aria-busy');
+      body?.classList.remove('diff-loading-open');
       return;
     }
 
@@ -499,6 +522,8 @@
     const selectedIndex = phaseNames.indexOf(phase in LOADING_PHASES ? phase : 'mapping');
     diffPage.classList.add('is-loading');
     diffPage.dataset.loadingState = phaseNames[selectedIndex];
+    diffPage.setAttribute('aria-busy', 'true');
+    body?.classList.add('diff-loading-open');
     loading.hidden = false;
     const loadingTitle = loading.querySelector('[data-loading-title]');
     const loadingMessage = loading.querySelector('[data-loading-message]');
@@ -527,13 +552,89 @@
       : Promise.resolve();
   }
 
+  function scrollPageToTop(target = root) {
+    if (typeof target?.scrollTo !== 'function') return;
+    target.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }
+
+  function navigateBackOrHome(target = root) {
+    if (Number(target?.history?.length) > 1 && typeof target.history.back === 'function') {
+      target.history.back();
+      return 'back';
+    }
+    if (typeof target?.location?.assign === 'function') {
+      target.location.assign(new URL('/', target.location.href).href);
+    }
+    return 'home';
+  }
+
+  function restoreFromUnsupportedHistory(document, target = root) {
+    if (!document?.body?.classList.contains('unsupported-mode')) return false;
+    if (typeof target?.location?.reload === 'function') target.location.reload();
+    return true;
+  }
+
+  function showUnsupportedPage(document, target = root, createHistoryEntry = false) {
+    const unsupportedPage = document?.querySelector('[data-unsupported-page]');
+    if (!unsupportedPage) return false;
+
+    if (createHistoryEntry && typeof target?.history?.pushState === 'function') {
+      target.history.pushState({ microsoftXUnsupported: true }, '', target.location?.href);
+    }
+
+    const marketing = document.querySelector('[data-marketing-root]');
+    const diffPage = document.querySelector('[data-diff-page]');
+    setLoadingSurface(diffPage, '', false);
+    [marketing, diffPage].forEach(page => {
+      if (!page) return;
+      page.hidden = true;
+      page.removeAttribute('id');
+    });
+    document.querySelectorAll('.skip-link, .independent-bar, .site-header, .site-footer').forEach(element => element.remove());
+    unsupportedPage.hidden = false;
+    unsupportedPage.id = 'main-content';
+    document.body?.classList.remove('diff-mode', 'diff-loading-open', 'shortcut-landing', 'missing-source-mode');
+    document.body?.classList.add('unsupported-mode');
+    document.title = 'Unsupported documentation — Microsoft Docs X-Ray';
+    addNoIndex(document);
+    scrollPageToTop(target);
+    return true;
+  }
+
+  function showMissingSourcePage(document, error, target = root) {
+    const diffPage = document?.querySelector('[data-diff-page]');
+    const missingPage = diffPage?.querySelector('[data-missing-source-page]');
+    if (!diffPage || !missingPage) return false;
+
+    setLoadingSurface(diffPage, '', false);
+    const message = missingPage.querySelector('[data-missing-source-message]');
+    if (message) message.textContent = error?.message || 'No public GitHub history was found for this Microsoft Learn page.';
+    const hero = diffPage.querySelector('.diff-hero');
+    const intro = diffPage.querySelector('[data-diff-intro]');
+    const results = diffPage.querySelector('[data-compare-results]');
+    const navigator = diffPage.querySelector('[data-diff-navigator]');
+    const status = diffPage.querySelector('[data-compare-status]');
+    if (hero) hero.hidden = true;
+    if (intro) intro.hidden = true;
+    if (results) results.hidden = true;
+    if (navigator) navigator.hidden = true;
+    setStatus(status, '', '');
+    missingPage.hidden = false;
+    document.body?.classList.add('missing-source-mode');
+    document.title = 'Page history not found — Microsoft Docs X-Ray';
+    addNoIndex(document);
+    scrollPageToTop(target);
+    return true;
+  }
+
   function commitDate(commit) {
     return commit?.commit?.author?.date || commit?.commit?.committer?.date || '';
   }
 
   function commitOption(commit, label) {
     const date = commitDate(commit);
-    const text = `${label || (date ? formatDate(date) : 'Unknown date')} — ${firstLine(commit.commit?.message) || 'Documentation update'}`;
+    const formattedDate = date ? formatDate(date) : 'Unknown date';
+    const text = `${label ? `${label} · ${formattedDate}` : formattedDate} — ${firstLine(commit.commit?.message) || 'Documentation update'}`;
     return `<option value="${escapeHtml(commit.sha)}">${escapeHtml(text)}</option>`;
   }
 
@@ -561,7 +662,9 @@
       const selected = commit.sha === baseSha || commit.sha === headSha;
       const role = commit.sha === baseSha ? 'From' : (commit.sha === headSha ? 'To' : '');
       const action = index === 0 ? 'Show latest change' : 'Compare from here to current';
-      return `<li class="version-event${selected ? ' selected' : ''}${index === 0 ? ' current' : ''}"><span class="version-node" aria-hidden="true"></span><button type="button" data-history-from="${escapeHtml(commit.sha)}" aria-pressed="${selected}"><span class="version-date">${escapeHtml(index === 0 ? 'Current version' : formatDate(date))}${role ? `<em>${role}</em>` : ''}</span><strong>${escapeHtml(firstLine(commit.commit?.message) || 'Documentation update')}</strong><small>${action}</small></button></li>`;
+      const formattedDate = date ? formatDate(date) : 'Unknown date';
+      const dateLabel = index === 0 ? `Current version · ${formattedDate}` : formattedDate;
+      return `<li class="version-event${selected ? ' selected' : ''}${index === 0 ? ' current' : ''}"><span class="version-node" aria-hidden="true"></span><button type="button" data-history-from="${escapeHtml(commit.sha)}" aria-pressed="${selected}"><span class="version-date">${escapeHtml(dateLabel)}${role ? `<em>${role}</em>` : ''}</span><strong>${escapeHtml(firstLine(commit.commit?.message) || 'Documentation update')}</strong><small>${action}</small></button></li>`;
     }).join('');
     return `<section class="version-explorer" aria-labelledby="version-history-heading"><header><div><span class="eyebrow">Version history</span><h2 id="version-history-heading">Choose a point in time</h2><p>Select any change to compare that version with the current page.</p></div><button class="share-view-button" type="button" data-share-view aria-label="Copy link to this view" title="Copy link to this view"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 15 5c0 .18.02.36.05.53L8.91 9.06A3 3 0 0 0 7 8.35a3 3 0 1 0 1.91 5.59l6.14 3.53A3 3 0 0 0 15 18a3 3 0 1 0 .83-2.07L9.7 12.4a3.1 3.1 0 0 0 0-.8l6.13-3.53A3 3 0 0 0 18 8Z"/></svg></button></header><div class="version-layout"><div><ol class="version-timeline" data-version-timeline>${timeline}</ol>${hasMore ? '<button class="load-history-button" type="button" data-load-older>Load older versions</button>' : ''}</div><aside class="comparison-controls"><span class="eyebrow">Current comparison</span><div class="comparison-range" data-comparison-summary>${comparisonSummary(comparison)}</div><button class="latest-change-button" type="button" data-compare-latest>Show latest change</button><details><summary>Advanced: compare any two versions</summary><div class="advanced-comparison"><label>Earlier version<select data-comparison-base>${options}</select></label><label>Later version<select data-comparison-head>${options}</select></label><button class="button-primary" type="button" data-compare-selected>Compare selected versions</button><p data-comparison-error role="status"></p></div></details><p class="share-view-status" data-share-status role="status" aria-live="polite"></p></aside></div></section>`;
   }
@@ -748,17 +851,33 @@
       context = { mode: 'error', error, targetUrl: null, refs: null };
     }
 
-    const homeForm = document.querySelector('[data-home-url-form]');
-    const homeStatus = document.querySelector('[data-home-url-status]');
-    homeForm?.addEventListener('submit', event => {
+    const unsupportedBack = document.querySelector('[data-unsupported-back]');
+    unsupportedBack?.addEventListener('click', event => {
       event.preventDefault();
-      try {
-        const shortcut = diffUrlForLearnUrl(homeForm.elements.url.value, root.location.href);
-        root.location.assign(shortcut);
-      } catch (error) { setStatus(homeStatus, error.message, 'error'); }
+      navigateBackOrHome(root);
+    });
+    root.addEventListener('popstate', () => restoreFromUnsupportedHistory(document, root));
+
+    document.querySelectorAll('[data-home-url-form]').forEach(homeForm => {
+      const homeStatus = homeForm.querySelector('[data-home-url-status]');
+      homeForm.addEventListener('submit', event => {
+        event.preventDefault();
+        try {
+          const value = homeForm.elements.url.value;
+          siteUrlToRepoInfo(value);
+          const shortcut = diffUrlForLearnUrl(value, root.location.href);
+          root.location.assign(shortcut);
+        } catch (error) {
+          if (!showUnsupportedPage(document, root, true)) setStatus(homeStatus, error.message, 'error');
+        }
+      });
     });
 
     if (context.mode === 'landing') prepareShortcutLanding(document, root.location.href);
+    if (context.mode === 'unsupported-origin') {
+      showUnsupportedPage(document);
+      return;
+    }
 
     if (context.mode === 'diff') addNoIndex(document);
     if (context.mode !== 'diff' && context.mode !== 'error') return;
@@ -899,6 +1018,11 @@
       const markdownDiff = diffPage.querySelector('[data-markdown-diff]');
       if (visualDiff) visualDiff.innerHTML = renderVisualDiff(comparison.before, comparison.after, info, baseRef, headRef);
       if (markdownDiff) markdownDiff.innerHTML = renderMarkdownDiff(comparison.before, comparison.after, info, baseRef, headRef);
+      const missingPage = diffPage.querySelector('[data-missing-source-page]');
+      const hero = diffPage.querySelector('.diff-hero');
+      if (missingPage) missingPage.hidden = true;
+      if (hero) hero.hidden = false;
+      document.body.classList.remove('missing-source-mode');
       intro.hidden = true;
       results.hidden = false;
       retryAfterTokenChange = null;
@@ -907,13 +1031,13 @@
       syncViewUrl();
       tabs.select(currentView, false);
       navigator.refresh();
+      scrollPageToTop(root);
     }
 
     async function compareRefs(refs) {
       if (!currentInfo) return;
       const loadingStartedAt = Date.now();
       navigator.hide();
-      results.hidden = true;
       setStatus(status, '', '');
       setLoadingSurface(diffPage, 'revisions');
       try {
@@ -983,13 +1107,15 @@
 
     async function loadArticle(value, requestedRefs) {
       const loadingStartedAt = Date.now();
-      results.hidden = true;
-      intro.hidden = true;
       navigator.hide();
       submit.disabled = true;
       submit.textContent = 'Loading history…';
       setStatus(status, '', '');
       setLoadingSurface(diffPage, 'mapping');
+      if (!currentComparison) {
+        results.hidden = true;
+        intro.hidden = true;
+      }
       try {
         if (context.targetUrl && value !== context.targetUrl) {
           root.location.assign(diffUrlForLearnUrl(value, root.location.href));
@@ -1000,7 +1126,7 @@
         historyPage = 1;
         currentHistory = await loadHistory(currentInfo, savedToken());
         if (!currentHistory.length) {
-          throw new Error(`No file history was found at ${currentInfo.path}. The Learn page may use a nonstandard source path.`);
+          throw missingSourceHistoryError(currentInfo.path);
         }
         historyHasMore = currentHistory.length === HISTORY_PAGE_SIZE;
         setLoadingSurface(diffPage, 'revisions');
@@ -1009,6 +1135,14 @@
         await waitForMinimumLoading(loadingStartedAt);
         renderComparison(comparison);
       } catch (error) {
+        if (isMissingSourceHistoryError(error)) {
+          showMissingSourcePage(document, error);
+          return;
+        }
+        if (isUnsupportedDocumentationError(error)) {
+          showUnsupportedPage(document);
+          return;
+        }
         intro.hidden = false;
         reportApiError(error, () => loadArticle(value, requestedRefs));
       } finally {
@@ -1030,6 +1164,8 @@
   const api = {
     TOKEN_STORAGE_KEY,
     configuredSources,
+    isUnsupportedDocumentationError,
+    isMissingSourceHistoryError,
     revisionRefsFromSearchParams,
     viewFromSearchParams,
     resolveShortcutLocation,
@@ -1039,6 +1175,12 @@
     prepareShortcutLanding,
     setLoadingSurface,
     remainingLoadingDuration,
+    scrollPageToTop,
+    showUnsupportedPage,
+    navigateBackOrHome,
+    restoreFromUnsupportedHistory,
+    showMissingSourcePage,
+    historyExplorer,
     siteUrlToRepoInfo,
     githubFileUrl,
     extractTitle,
