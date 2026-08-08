@@ -23,7 +23,8 @@ Microsoft Docs X-Ray is an independent community project and is not affiliated w
 ## Architecture
 
 - `microsoftx.com` serves indexed static Home, About, Supported, and Privacy pages.
-- `learn.microsoftx.com` serves the same Cloudflare Pages project. Unknown paths receive the root SPA document, which reconstructs the corresponding `learn.microsoft.com` URL and loads the diff.
+- `learn.microsoftx.com` keeps the one-letter shortcut. Any additional HTTPS custom domain can serve both the static site and portable diff paths such as `https://alternative.example/en-us/entra/...` from the same build.
+- Unknown paths receive the root SPA document, which reconstructs the corresponding `learn.microsoft.com` URL and loads the diff. First-party navigation and assets are root-relative, so no runtime resource depends on `microsoftx.com` being reachable.
 - Other `*.microsoftx.com` hostnames are redirected to the apex by a Cloudflare zone rule.
 - The browser contacts only `api.github.com` for comparison data. Relative documentation images can load from `raw.githubusercontent.com`.
 - There is no Worker script, Pages Function, application server, database, or shared GitHub token.
@@ -40,7 +41,13 @@ npm test
 npm run preview
 ```
 
-Open `http://127.0.0.1:4173/`. To launch the diff page directly, pass a Learn URL through the development query interface:
+Open `http://127.0.0.1:4173/`. To launch the diff page directly, use the portable path form:
+
+```text
+http://127.0.0.1:4173/en-us/entra/identity/conditional-access/overview
+```
+
+The legacy query interface remains supported:
 
 ```text
 http://127.0.0.1:4173/?url=https%3A%2F%2Flearn.microsoft.com%2Fen-us%2Fentra%2Fidentity%2Fconditional-access%2Foverview
@@ -67,6 +74,9 @@ Then paste the direct local URL above into the browser. The preview server serve
 ## URL interface
 
 - `https://learn.microsoftx.com/<learn-path>?<learn-query>#<fragment>` maps to the equivalent `https://learn.microsoft.com` URL.
+- `https://<any-configured-domain>/<learn-path>?<learn-query>#<fragment>` provides the same comparison without relying on the MicrosoftX domain.
+- `/`, `/about/`, `/supported/`, and `/privacy/` are reserved static site routes; other non-empty paths are treated as Learn diff paths.
+- Remote deployments must use HTTPS. Plain HTTP is accepted only on localhost for development.
 - Learn query parameters are preserved, including Microsoft Graph's `view=graph-rest-beta` and `view=graph-rest-1.0` selectors.
 - `_mx_head=<sha>` compares a selected commit with its first parent.
 - `_mx_base=<sha>&_mx_head=<sha>` compares two exact revisions.
@@ -78,7 +88,7 @@ Then paste the direct local URL above into the browser. The preview server serve
 
 Anonymous GitHub access is always attempted first. The UI does not show request counts during normal use. If GitHub reports an exhausted limit or rejected credential, Microsoft Docs X-Ray offers API settings.
 
-An optional fine-grained token is stored in the visitor's `localStorage`. Request code rejects every token-bearing endpoint whose protocol and hostname are not exactly `https://api.github.com`.
+An optional fine-grained token is stored in the visitor's origin-scoped `localStorage`. A token saved on one domain is not available to another domain and must be added separately there. Request code rejects every token-bearing endpoint whose protocol and hostname are not exactly `https://api.github.com`.
 
 Rendered Markdown is sanitized before it is inserted into the page. Scripts, frames, forms, active content, event attributes, inline styles, and unsafe protocols are removed.
 
@@ -95,11 +105,13 @@ Recommended Pages configuration:
 | Build output directory | `dist` |
 | Node version | `20` or later |
 
+The build uses `https://microsoftx.com` as the indexed SEO origin by default. Set `CANONICAL_ORIGIN` to another path-free HTTPS origin only when intentionally changing the primary site. Navigation and runtime assets remain root-relative regardless of this setting; canonical tags, Open Graph URLs, structured data, `robots.txt`, and `sitemap.xml` remain absolute as required for SEO.
+
 ## Tests
 
 `npm test` builds the production artifact and runs Node tests covering:
 
-- shortcut and revision URL parsing;
+- shortcut, portable-domain, and revision URL parsing;
 - every configured documentation area;
 - Microsoft Graph query-specific mappings;
 - the SMS/voice retirement example;

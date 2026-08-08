@@ -6,10 +6,10 @@
   'use strict';
 
   const TOKEN_STORAGE_KEY = 'microsoftx-github-token';
-  const PRODUCTION_APEX = 'microsoftx.com';
-  const PRODUCTION_SHORTCUT = 'learn.microsoftx.com';
   const HISTORY_PAGE_SIZE = 100;
   const VIEW_NAMES = new Set(['visual', 'markdown']);
+  const ROOT_PATHS = new Set(['/', '/index.html']);
+  const LANDING_PATHS = new Set(['/', '/index.html', '/about', '/about/', '/supported', '/supported/', '/privacy', '/privacy/']);
   let nodeConfig = null;
   if (typeof module === 'object' && module.exports && typeof require === 'function') {
     try { nodeConfig = require('./diff-config'); } catch {}
@@ -49,43 +49,45 @@
     return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
   }
 
+  function isAllowedSiteOrigin(url) {
+    return url.protocol === 'https:' || (url.protocol === 'http:' && isLocalHostname(url.hostname.toLowerCase()));
+  }
+
   function resolveShortcutLocation(locationLike) {
     const href = typeof locationLike === 'string' ? locationLike : locationLike?.href;
     let pageUrl;
     try { pageUrl = new URL(href); } catch { throw new Error('The current page URL is invalid.'); }
-    const hostname = pageUrl.hostname.toLowerCase();
+    if (!isAllowedSiteOrigin(pageUrl)) {
+      return { mode: 'unsupported-origin', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual', routeStyle: null };
+    }
 
-    if (hostname === PRODUCTION_SHORTCUT) {
-      if (pageUrl.pathname === '/' || !pageUrl.pathname.replaceAll('/', '')) {
-        return { mode: 'landing', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual' };
-      }
+    const queryTarget = pageUrl.searchParams.get('url');
+    if (queryTarget && ROOT_PATHS.has(pageUrl.pathname)) {
+      let target;
+      try { target = new URL(queryTarget); } catch { throw new Error('The supplied documentation URL is invalid.'); }
+      const refs = revisionRefsFromSearchParams(pageUrl.searchParams);
+      const view = viewFromSearchParams(pageUrl.searchParams);
+      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs, view, routeStyle: 'query' };
+    }
+
+    if (!LANDING_PATHS.has(pageUrl.pathname) && pageUrl.pathname.replaceAll('/', '')) {
       const target = new URL(`https://learn.microsoft.com${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
       const refs = revisionRefsFromSearchParams(target.searchParams);
       const view = viewFromSearchParams(target.searchParams);
       target.searchParams.delete('_mx_base');
       target.searchParams.delete('_mx_head');
       target.searchParams.delete('_mx_view');
-      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs, view };
+      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs, view, routeStyle: 'path' };
     }
 
-    if (hostname === PRODUCTION_APEX || hostname === `www.${PRODUCTION_APEX}` || isLocalHostname(hostname)) {
-      const queryTarget = pageUrl.searchParams.get('url');
-      if (!queryTarget) return { mode: 'landing', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual' };
-      let target;
-      try { target = new URL(queryTarget); } catch { throw new Error('The supplied documentation URL is invalid.'); }
-      const refs = revisionRefsFromSearchParams(pageUrl.searchParams);
-      const view = viewFromSearchParams(pageUrl.searchParams);
-      return { mode: 'diff', pageUrl: pageUrl.href, targetUrl: target.href, refs, view };
-    }
-
-    return { mode: 'unsupported-host', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual' };
+    return { mode: 'landing', pageUrl: pageUrl.href, targetUrl: null, refs: null, view: 'visual', routeStyle: null };
   }
 
   function viewUrlForState(pageHref, targetUrl, refs, view = 'visual') {
     let pageUrl;
     try { pageUrl = new URL(pageHref); } catch { throw new Error('The current page URL is invalid.'); }
-    const hostname = pageUrl.hostname.toLowerCase();
-    if (hostname !== PRODUCTION_SHORTCUT) pageUrl.searchParams.set('url', targetUrl);
+    const pathRoute = !LANDING_PATHS.has(pageUrl.pathname);
+    if (!pathRoute) pageUrl.searchParams.set('url', targetUrl);
     if (refs?.base) pageUrl.searchParams.set('_mx_base', refs.base);
     else pageUrl.searchParams.delete('_mx_base');
     if (refs?.head) pageUrl.searchParams.set('_mx_head', refs.head);
@@ -96,7 +98,7 @@
     return pageUrl.href;
   }
 
-  function shortcutUrlForLearnUrl(value) {
+  function diffUrlForLearnUrl(value, pageHref) {
     let input;
     try { input = new URL(String(value || '').trim()); } catch {
       throw new Error('Enter a complete Microsoft Learn URL, including https://.');
@@ -104,8 +106,19 @@
     if (input.protocol !== 'https:' || input.hostname.toLowerCase() !== 'learn.microsoft.com') {
       throw new Error('Use an https://learn.microsoft.com article URL.');
     }
-    return `https://${PRODUCTION_SHORTCUT}${input.pathname}${input.search}${input.hash}`;
+    let pageUrl;
+    try { pageUrl = new URL(pageHref || root.location?.href); } catch {
+      throw new Error('The current Docs X-Ray URL is invalid.');
+    }
+    if (!isAllowedSiteOrigin(pageUrl)) throw new Error('Docs X-Ray requires HTTPS outside local development.');
+    const target = new URL('/', pageUrl.origin);
+    target.pathname = input.pathname;
+    target.search = input.search;
+    target.hash = input.hash;
+    return target.href;
   }
+
+  const shortcutUrlForLearnUrl = diffUrlForLearnUrl;
 
   function decodePathSegment(segment) {
     let decoded;
@@ -597,15 +610,12 @@
     homeForm?.addEventListener('submit', event => {
       event.preventDefault();
       try {
-        const shortcut = shortcutUrlForLearnUrl(homeForm.elements.url.value);
+        const shortcut = diffUrlForLearnUrl(homeForm.elements.url.value, root.location.href);
         root.location.assign(shortcut);
       } catch (error) { setStatus(homeStatus, error.message, 'error'); }
     });
 
-    if (root.location.hostname === PRODUCTION_APEX && root.location.pathname !== '/') {
-      root.history.replaceState(null, '', `/${root.location.search}${root.location.hash}`);
-    }
-    if (root.location.hostname === PRODUCTION_SHORTCUT) addNoIndex(document);
+    if (context.mode === 'diff') addNoIndex(document);
     if (context.mode !== 'diff' && context.mode !== 'error') return;
 
     const marketing = document.querySelector('[data-marketing-root]');
@@ -805,8 +815,8 @@
       submit.textContent = 'Loading history…';
       setStatus(status, 'Finding the source file and its version history on GitHub…', 'loading');
       try {
-        if (root.location.hostname === PRODUCTION_SHORTCUT && context.targetUrl && value !== context.targetUrl) {
-          root.location.assign(shortcutUrlForLearnUrl(value));
+        if (context.targetUrl && value !== context.targetUrl) {
+          root.location.assign(diffUrlForLearnUrl(value, root.location.href));
           return;
         }
         currentInfo = siteUrlToRepoInfo(value);
@@ -844,6 +854,7 @@
     viewFromSearchParams,
     resolveShortcutLocation,
     viewUrlForState,
+    diffUrlForLearnUrl,
     shortcutUrlForLearnUrl,
     siteUrlToRepoInfo,
     githubFileUrl,

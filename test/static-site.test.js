@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync, spawnSync } = require('node:child_process');
 const { JSDOM } = require('jsdom');
 
 const root = path.resolve(__dirname, '..');
@@ -46,10 +47,11 @@ test('each indexed page has unique metadata, a canonical URL, and one visible do
     assert.equal(authorLink.getAttribute('rel'), 'noopener noreferrer');
     const headerLinks = [...document.querySelectorAll('.site-nav > a')];
     assert.deepEqual(headerLinks.slice(0, 5).map(link => link.textContent.trim()), ['Home', 'About', 'Maester.Cloud', 'Entra.News', 'merill.net']);
-    assert.equal(document.querySelector('.site-nav a[href="https://microsoftx.com/supported/"]'), null);
-    assert.equal(document.querySelector('.site-nav a[href="https://microsoftx.com/privacy/"]'), null);
-    assert.ok(document.querySelector('.footer-utility-links a[href="https://microsoftx.com/supported/"]'));
-    assert.ok(document.querySelector('.footer-utility-links a[href="https://microsoftx.com/privacy/"]'));
+    assert.equal(document.querySelector('.site-nav a[href="/"]').textContent, 'Home');
+    assert.equal(document.querySelector('.site-nav a[href="/about/"]').textContent, 'About');
+    assert.ok(document.querySelector('.footer-utility-links a[href="/supported/"]'));
+    assert.ok(document.querySelector('.footer-utility-links a[href="/privacy/"]'));
+    assert.equal(document.querySelectorAll('a[href^="https://microsoftx.com"]').length, 0);
     assert.equal(document.querySelectorAll('#main-content').length, 1, file);
     assert.equal(document.querySelector('.independent-bar').textContent.includes('not affiliated with Microsoft'), true);
     assert.match(document.body.textContent, /Microsoft Docs X-Ray|Docs X-Ray/);
@@ -57,6 +59,21 @@ test('each indexed page has unique metadata, a canonical URL, and one visible do
     titles.add(document.title);
   }
   assert.equal(titles.size, pages.length);
+});
+
+test('first-party navigation is root-relative while SEO metadata stays on the primary origin', () => {
+  for (const file of ['index.html', 'about/index.html', 'supported/index.html', 'privacy/index.html']) {
+    const document = new JSDOM(read(file)).window.document;
+    assert.equal(document.querySelector('.brand').getAttribute('href'), '/');
+    assert.equal(document.querySelectorAll('a[href^="https://microsoftx.com"]').length, 0);
+    assert.match(document.querySelector('link[rel="canonical"]').href, /^https:\/\/microsoftx\.com\//);
+    assert.match(document.querySelector('meta[property="og:image"]').content, /^https:\/\/microsoftx\.com\//);
+  }
+  const supported = new JSDOM(read('supported/index.html')).window.document;
+  assert.ok(supported.querySelector('.repo-table a[href="/en-us/entra/identity/conditional-access/overview"]'));
+  const buildSource = fs.readFileSync(path.join(root, 'scripts/build.js'), 'utf8');
+  assert.equal((buildSource.match(/https:\/\/microsoftx\.com/g) || []).length, 1);
+  assert.match(buildSource, /process\.env\.CANONICAL_ORIGIN/);
 });
 
 test('home page contains crawlable software and FAQ structured data plus the diff shell', () => {
@@ -173,6 +190,8 @@ test('GitHub token settings use the Entra-style slide-over and retry flow', () =
   assert.match(siteJs, /event\.key !== 'Tab'/);
   assert.match(diffJs, /retryAfterTokenChange/);
   assert.match(diffJs, /new root\.CustomEvent\('github-token-required'/);
+  assert.match(diffJs, /if \(context\.mode === 'diff'\) addNoIndex\(document\)/);
+  assert.doesNotMatch(diffJs, /PRODUCTION_APEX|PRODUCTION_SHORTCUT/);
   assert.doesNotMatch(diffJs, /setupTokenDialog|data-token-open|data-token-dialog/);
 });
 
@@ -221,6 +240,8 @@ test('About, Supported, and Privacy pages contain the promised durable content',
   assert.match(read('supported/index.html'), /graph-rest-beta/);
   assert.match(read('privacy/index.html'), /api\.github\.com/);
   assert.match(read('privacy/index.html'), /localStorage/);
+  assert.match(read('privacy/index.html'), /origin-scoped/);
+  assert.match(read('privacy/index.html'), /do not share it with another Docs X-Ray domain/);
 });
 
 test('footer links to Merill social profiles', () => {
@@ -312,4 +333,32 @@ test('social preview uses a deployable 1200 by 630 PNG', () => {
   assert.match(source, />ADD THE X</);
   assert.match(source, /stroke-linecap="round"/);
   assert.equal(fs.existsSync(path.join(dist, 'favicon.svg')), false);
+});
+
+test('the build accepts a validated primary canonical origin', () => {
+  try {
+    execFileSync(process.execPath, ['scripts/build.js'], {
+      cwd: root,
+      env: { ...process.env, CANONICAL_ORIGIN: 'https://primary.example' },
+      stdio: 'pipe'
+    });
+    const document = new JSDOM(read('index.html')).window.document;
+    assert.equal(document.querySelector('link[rel="canonical"]').href, 'https://primary.example/');
+    assert.equal(document.querySelector('meta[property="og:image"]').content, 'https://primary.example/assets/branding/microsoftx-og.png');
+    assert.match(read('robots.txt'), /Sitemap: https:\/\/primary\.example\/sitemap\.xml/);
+
+    const invalid = spawnSync(process.execPath, ['scripts/build.js'], {
+      cwd: root,
+      env: { ...process.env, CANONICAL_ORIGIN: 'http://primary.example/path' },
+      encoding: 'utf8'
+    });
+    assert.notEqual(invalid.status, 0);
+    assert.match(invalid.stderr, /CANONICAL_ORIGIN must be an HTTPS origin/);
+  } finally {
+    execFileSync(process.execPath, ['scripts/build.js'], {
+      cwd: root,
+      env: { ...process.env, CANONICAL_ORIGIN: 'https://microsoftx.com' },
+      stdio: 'pipe'
+    });
+  }
 });
