@@ -174,7 +174,7 @@ test('home page replaces How it works with every supported Learn product and pat
     'Microsoft Entra': '/entra',
     'Azure': '/azure',
     'Microsoft 365': '/microsoft-365',
-    'Microsoft Intune': '/mem',
+    'Microsoft Intune': '/intune + /mem',
     'Microsoft Graph': '/graph',
     'Microsoft Fabric': '/fabric',
     'Dynamics 365': '/dynamics365',

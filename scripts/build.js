@@ -98,7 +98,7 @@ const productDefinitions = [
   ['Microsoft Entra', '/entra', '/assets/icons/products/microsoft-entra.svg'],
   ['Azure', '/azure', '/assets/icons/products/azure.svg'],
   ['Microsoft 365', '/microsoft-365', '/assets/icons/products/microsoft-365.svg'],
-  ['Microsoft Intune', '/mem', '/assets/icons/products/microsoft-intune.svg'],
+  ['Microsoft Intune', '/intune', '/assets/icons/products/microsoft-intune.svg', '', '/intune + /mem'],
   ['Microsoft Graph', '/graph', '/assets/icons/Graph.png'],
   ['Microsoft Fabric', '/fabric', '/assets/icons/products/microsoft-fabric.svg'],
   ['Dynamics 365', '/dynamics365', '/assets/icons/products/dynamics-365.svg'],
@@ -113,10 +113,10 @@ const productDefinitions = [
 function supportedProductsComponent({ headingId, className = 'section supported-products-section' }) {
   const configuredLabels = new Set(config.sources.map(source => source.label));
   const products = productDefinitions.filter(([label]) => configuredLabels.has(label));
-  const productCards = products.map(([label, learnPath, iconPath, iconClass = '']) => {
+  const productCards = products.map(([label, learnPath, iconPath, iconClass = '', displayPath = learnPath]) => {
     const iconUrl = versionedAsset(iconPath);
     const imageClass = iconClass ? ` class="${escapeHtml(iconClass)}"` : '';
-    return `<a class="product-card" href="https://learn.microsoft.com${learnPath}/" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)} documentation on Microsoft Learn"><span class="product-icon" aria-hidden="true"><img${imageClass} src="${escapeHtml(iconUrl)}" alt="" width="48" height="48" loading="lazy"></span><span class="product-details"><strong>${escapeHtml(label)}</strong><code>${escapeHtml(learnPath)}</code></span></a>`;
+    return `<a class="product-card" href="https://learn.microsoft.com${learnPath}/" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)} documentation on Microsoft Learn"><span class="product-icon" aria-hidden="true"><img${imageClass} src="${escapeHtml(iconUrl)}" alt="" width="48" height="48" loading="lazy"></span><span class="product-details"><strong>${escapeHtml(label)}</strong><code>${escapeHtml(displayPath)}</code></span></a>`;
   }).join('');
   return `<section class="${className}" data-supported-products aria-labelledby="${headingId}"><div class="section-heading"><span class="eyebrow">Supported documentation</span><h2 id="${headingId}">Microsoft Learn areas with X-ray vision.</h2><p>${products.length} product areas are mapped to their public documentation source.</p></div><div class="product-grid">${productCards}</div><div class="product-grid-footer"><a href="/supported/">Mapping details and limitations →</a></div></section>`;
 }
@@ -405,7 +405,7 @@ function supportedPage() {
       '.NET': 'en-us/dotnet/core/introduction',
       'PowerShell': 'en-us/powershell/scripting/overview',
       'Microsoft 365': 'en-us/microsoft-365/admin/setup/setup',
-      'Microsoft Intune': 'en-us/mem/intune/fundamentals/what-is-intune',
+      'Microsoft Intune': 'en-us/intune/fundamentals/what-is-intune',
       'Microsoft Fabric': 'en-us/fabric/get-started/microsoft-fabric-overview',
       'Dynamics 365': 'en-us/dynamics365/get-started/intro-crossapp-index',
       'SQL': 'en-us/sql/sql-server/what-s-new-in-sql-server-2025',
@@ -417,7 +417,7 @@ function supportedPage() {
     return `<tr id="${anchor}"><th scope="row">${escapeHtml(source.label)}</th><td><a href="${escapeHtml(source.repositoryUrl)}">${escapeHtml(repo)}</a></td><td><code>${escapeHtml(source.defaultBranch)}</code></td><td><a href="/${exampleSuffix}">Try example ↗</a></td></tr>`;
   }).join('');
   const sections = `<h2 id="areas">Supported product areas</h2><p>Microsoft Docs X-Ray uses an ordered, reviewed configuration rather than guessing. Narrow routes such as Microsoft Graph API versions and Fabric get-started pages are matched before broader product routes.</p><div class="table-scroll"><table class="repo-table"><thead><tr><th>Learn area</th><th>Public source repository</th><th>Branch</th><th>Example</th></tr></thead><tbody>${rows}</tbody></table></div>
-  <h2 id="mapping">How URL mapping works</h2><p>A leading locale such as <code>en-us</code> or <code>fr-fr</code> is removed for repository lookup. The configured Learn prefix is replaced with a repository path prefix, and the article slug becomes a Markdown filename.</p><p>For example, <code>/en-us/entra/identity/conditional-access/overview</code> maps to <code>docs/identity/conditional-access/overview.md</code> in <code>MicrosoftDocs/entra-docs</code>.</p><p>Query-specific mappings are supported. Microsoft Graph’s <code>?view=graph-rest-beta</code> selects the beta API source tree, while <code>graph-rest-1.0</code> selects v1.0.</p>
+  <h2 id="mapping">How URL mapping works</h2><p>A leading locale such as <code>en-us</code> or <code>fr-fr</code> is removed for repository lookup. The configured Learn prefix is replaced with a repository path prefix, and the article slug becomes a Markdown filename.</p><p>For example, <code>/en-us/entra/identity/conditional-access/overview</code> maps to <code>docs/identity/conditional-access/overview.md</code> in <code>MicrosoftDocs/entra-docs</code>.</p><p>Microsoft Intune supports both the current <code>/intune/…</code> URLs and legacy <code>/mem/intune/…</code> URLs; both map to the same <code>intune/…</code> source tree in <code>MicrosoftDocs/memdocs</code>.</p><p>Query-specific mappings are supported. Microsoft Graph’s <code>?view=graph-rest-beta</code> selects the beta API source tree, while <code>graph-rest-1.0</code> selects v1.0.</p>
   <h2 id="limits">Limitations</h2><ul><li>Some Learn pages are generated, private, moved, or sourced through nonstandard publishing pipelines.</li><li>A public URL does not always have a one-to-one public Markdown file.</li><li>Docs X-Ray compares Git revisions, not changes introduced by runtime Learn rendering or personalization.</li><li>Repository moves can temporarily break a mapping until the configuration is updated.</li></ul><p>Unsupported paths fail explicitly and link back to the original Learn page. To request a mapping, <a href="https://github.com/merill/microsoftx/issues">open an issue with an example URL</a>.</p>`;
   return pageLayout({ title: 'Supported Microsoft Learn documentation — Microsoft Docs X-Ray', description: 'Microsoft Learn product areas, public GitHub repositories, branches, examples, and mapping limitations supported by Microsoft Docs X-Ray.', pathName: '/supported/', current: 'supported', breadcrumbs: breadcrumbs('Supported documentation'), content: contentPage({ current: 'supported', title: 'Supported documentation', lede: 'Reliable X-ray vision begins with transparent, testable mappings to public source repositories.', sections, aside: '<strong>In this article</strong><br><a href="#areas">Product areas</a><br><a href="#mapping">URL mapping</a><br><a href="#limits">Limitations</a>' }) });
 }

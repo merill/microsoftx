@@ -291,6 +291,20 @@ test('the supplied Entra article maps to the expected public repository path', (
   assert.equal(info.defaultBranch, 'main');
 });
 
+test('current and legacy Intune routes map to the same memdocs source file', () => {
+  const article = 'fundamentals/role-based-access-control/multi-admin-approval';
+  const current = siteUrlToRepoInfo(`https://learn.microsoft.com/en-us/intune/${article}`);
+  const legacy = siteUrlToRepoInfo(`https://learn.microsoft.com/en-us/mem/intune/${article}`);
+  assert.deepEqual(
+    [current.repository, current.path, current.defaultBranch],
+    ['MicrosoftDocs/memdocs', `intune/${article}.md`, 'main']
+  );
+  assert.deepEqual(
+    [legacy.repository, legacy.path, legacy.defaultBranch],
+    [current.repository, current.path, current.defaultBranch]
+  );
+});
+
 test('representative configured docsets map to their public repositories', () => {
   const examples = [
     ['https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview', 'MicrosoftDocs/entra-docs', 'docs/identity/conditional-access/overview.md', 'main'],

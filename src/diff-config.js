@@ -110,6 +110,16 @@
         fileExtension: '.md'
       },
       {
+        id: 'intune-direct-learn',
+        label: 'Microsoft Intune',
+        siteUrl: 'https://learn.microsoft.com/intune/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/memdocs',
+        repositoryPathPrefix: 'intune',
+        defaultBranch: 'main',
+        fileExtension: '.md'
+      },
+      {
         id: 'intune-learn',
         label: 'Microsoft Intune',
         siteUrl: 'https://learn.microsoft.com/mem/',
