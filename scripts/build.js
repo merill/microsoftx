@@ -2,12 +2,29 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const config = require('../src/diff-config');
 
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
 const srcDir = path.join(rootDir, 'src');
 const canonicalOrigin = normalizeCanonicalOrigin(process.env.CANONICAL_ORIGIN || 'https://microsoftx.com');
+const assetVersion = crypto.createHash('sha256')
+  .update([
+    __filename,
+    path.join(srcDir, 'site.css'),
+    path.join(srcDir, 'site.js'),
+    path.join(srcDir, 'theme-bootstrap.js'),
+    path.join(srcDir, 'diff-config.js'),
+    path.join(srcDir, 'diff-app.js'),
+    path.join(rootDir, 'package-lock.json')
+  ].map(file => fs.readFileSync(file)).join('\n'))
+  .digest('hex')
+  .slice(0, 12);
+
+function versionedAsset(pathName) {
+  return `${pathName}?v=${assetVersion}`;
+}
 
 function normalizeCanonicalOrigin(value) {
   let url;
@@ -86,7 +103,7 @@ function header(current) {
   <div class="independent-bar">Independent community tool — not affiliated with Microsoft</div>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="/" aria-label="Microsoft Docs X-Ray home"><img class="brand-logo" src="/assets/branding/microsoftx-icon-64.png" alt=""><span>Microsoft Docs X-Ray</span><small>See what changed</small></a>
+      <a class="brand" href="/" aria-label="Microsoft Docs X-Ray home"><img class="brand-logo" src="${versionedAsset('/assets/branding/microsoftx-icon-64.png')}" alt=""><span>Microsoft Docs X-Ray</span><small>See what changed</small></a>
       ${navigation(current)}
       <div class="header-controls">
         <button class="header-action menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-label="Open navigation">${icons.menu}</button>
@@ -111,7 +128,7 @@ function footer() {
     </div>
     <div class="footer-utility-wrap">
       <div class="footer-utility">
-        <section class="footer-identity"><a class="brand" href="/"><img class="brand-logo" src="/assets/branding/microsoftx-icon-64.png" alt=""><span>Microsoft Docs X-Ray</span></a><p>Independent community tool for seeing what changed in Microsoft Learn.</p></section>
+        <section class="footer-identity"><a class="brand" href="/"><img class="brand-logo" src="${versionedAsset('/assets/branding/microsoftx-icon-64.png')}" alt=""><span>Microsoft Docs X-Ray</span></a><p>Independent community tool for seeing what changed in Microsoft Learn.</p></section>
         <nav class="footer-utility-links" aria-label="Footer"><a href="/about/">About</a><a href="/supported/">Supported documentation</a><a href="/privacy/">Privacy</a><a href="https://github.com/merill/microsoftx" target="_blank" rel="noopener noreferrer">Source on GitHub</a><a href="https://github.com/merill/microsoftx/issues" target="_blank" rel="noopener noreferrer">Report an issue</a><a href="https://merill.net" target="_blank" rel="noopener noreferrer">merill.net</a><a href="https://daily.entra.news" target="_blank" rel="noopener noreferrer">Daily.Entra.News</a></nav>
         <nav class="social-icon-links" data-social-links aria-label="Follow Merill"><span class="footer-social-title">Follow Merill</span><div class="social-icon-grid">${socialProfiles.map(([id, label, href, icon]) => `<a class="social-${id}" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}" title="${label}">${icon}</a>`).join('')}</div></nav>
       </div>
@@ -166,12 +183,12 @@ function pageLayout({ title, description, pathName, current, breadcrumbs, conten
   <meta name="twitter:image" content="${socialImage}">
   <meta name="twitter:image:alt" content="${escapeHtml(ogImageAlt)}">
   <meta name="theme-color" content="#0067b8">
-  <link rel="icon" href="/assets/branding/favicon-32.png" type="image/png" sizes="32x32">
-  <link rel="icon" href="/assets/branding/microsoftx-icon-64.png" type="image/png" sizes="64x64">
-  <link rel="apple-touch-icon" href="/assets/branding/microsoftx-icon-192.png">
+  <link rel="icon" href="${versionedAsset('/assets/branding/favicon-32.png')}" type="image/png" sizes="32x32">
+  <link rel="icon" href="${versionedAsset('/assets/branding/microsoftx-icon-64.png')}" type="image/png" sizes="64x64">
+  <link rel="apple-touch-icon" href="${versionedAsset('/assets/branding/microsoftx-icon-192.png')}">
   <link rel="manifest" href="/site.webmanifest">
-  <link rel="stylesheet" href="/assets/site.css">
-  <script src="/assets/theme-bootstrap.js"></script>
+  <link rel="stylesheet" href="${versionedAsset('/assets/site.css')}">
+  <script src="${versionedAsset('/assets/theme-bootstrap.js')}"></script>
 </head>
 <body ${bodyAttributes}>
   <div itemscope itemtype="https://schema.org/WebSite"><meta itemprop="name" content="Microsoft Docs X-Ray"><meta itemprop="url" content="${canonicalOrigin}/"></div>
@@ -180,7 +197,7 @@ function pageLayout({ title, description, pathName, current, breadcrumbs, conten
   ${content}
   ${footer()}
   ${current === 'home' ? githubTokenDrawer() : ''}
-  <script src="/assets/site.js"></script>
+  <script src="${versionedAsset('/assets/site.js')}"></script>
   ${extraScripts}
 </body>
 </html>`;
@@ -248,7 +265,7 @@ function diffApplication() {
     </section>
     <aside class="diff-intro" data-diff-intro><strong>Supported Microsoft Learn areas</strong><p>Entra, Azure, Microsoft Graph, .NET, PowerShell, Microsoft 365, Intune, Fabric, Dynamics 365, SQL, Visual Studio, ASP.NET Core, and Windows Server.</p><a href="/supported/">View mappings and limitations</a></aside>
     <article data-compare-results hidden>
-      <header class="result-head"><span class="eyebrow" data-result-source>Documentation source</span><h2 data-result-title></h2><nav class="source-links" aria-label="Open documentation sources"><a data-result-learn target="_blank" rel="noopener noreferrer" aria-label="Open on Microsoft Learn" title="Open on Microsoft Learn"><img class="microsoft-source-icon" src="/assets/icons/microsoft.svg" width="16" height="16" alt=""><span>Microsoft Learn</span></a><a data-result-github target="_blank" rel="noopener noreferrer" aria-label="Open the source on GitHub" title="Open the source on GitHub"><img src="/assets/icons/github.svg" width="16" height="16" alt=""><span>GitHub</span></a></nav></header>
+      <header class="result-head"><span class="eyebrow" data-result-source>Documentation source</span><h2 data-result-title></h2><nav class="source-links" aria-label="Open documentation sources"><a data-result-learn target="_blank" rel="noopener noreferrer" aria-label="Open on Microsoft Learn" title="Open on Microsoft Learn"><img class="microsoft-source-icon" src="${versionedAsset('/assets/icons/microsoft.svg')}" width="16" height="16" alt=""><span>Microsoft Learn</span></a><a data-result-github target="_blank" rel="noopener noreferrer" aria-label="Open the source on GitHub" title="Open the source on GitHub"><img src="${versionedAsset('/assets/icons/github.svg')}" width="16" height="16" alt=""><span>GitHub</span></a></nav></header>
       <div class="diff-workspace"><section class="diff-content" data-diff-content><header class="diff-heading"><div><span class="eyebrow">Browser-generated comparison</span><h2>What changed</h2></div><p data-result-stats></p></header><div class="diff-tabs" role="tablist"><button class="active" type="button" role="tab" aria-selected="true" data-diff-tab="visual">Visual diff</button><button type="button" role="tab" aria-selected="false" data-diff-tab="markdown">Markdown diff</button></div><div class="diff-panel" role="tabpanel" data-diff-panel="visual" data-visual-diff></div><div class="diff-panel" role="tabpanel" data-diff-panel="markdown" data-markdown-diff hidden></div></section><aside class="version-sidebar" aria-label="Version history and comparison controls" data-version-explorer></aside></div>
     </article>
     <nav class="diff-navigator" data-diff-navigator aria-label="Navigate documentation changes" hidden><button type="button" data-diff-previous title="Previous diff" aria-label="Previous diff"><span aria-hidden="true">←</span><span class="diff-navigator-text">Previous diff</span></button><span class="diff-navigator-label" data-diff-position aria-live="polite">Changes</span><button type="button" data-diff-next title="Next diff" aria-label="Next diff"><span class="diff-navigator-text">Next diff</span><span aria-hidden="true">→</span></button></nav>
@@ -298,7 +315,7 @@ function homePage() {
     current: 'home',
     content: `${marketing}${diffApplication()}`,
     bodyAttributes: 'class="home-page"',
-    extraScripts: '<script src="/assets/diff-config.js"></script><script src="/assets/vendor/marked.js"></script><script src="/assets/vendor/diff.min.js"></script><script src="/assets/vendor/htmldiff.js"></script><script src="/assets/diff-app.js"></script>'
+    extraScripts: `<script src="${versionedAsset('/assets/diff-config.js')}"></script><script src="${versionedAsset('/assets/vendor/marked.js')}"></script><script src="${versionedAsset('/assets/vendor/diff.min.js')}"></script><script src="${versionedAsset('/assets/vendor/htmldiff.js')}"></script><script src="${versionedAsset('/assets/diff-app.js')}"></script>`
   });
 }
 

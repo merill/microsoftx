@@ -39,7 +39,7 @@ test('each indexed page has unique metadata, a canonical URL, and one visible do
     assert.equal(document.querySelector('meta[property="og:site_name"]').content, 'Microsoft Docs X-Ray');
     assert.equal(document.querySelector('meta[name="twitter:card"]').content, 'summary_large_image');
     assert.equal(document.querySelector('meta[name="twitter:image"]').content, 'https://microsoftx.com/assets/branding/microsoftx-og.png');
-    assert.equal(document.querySelector('link[rel="icon"][sizes="32x32"]').getAttribute('href'), '/assets/branding/favicon-32.png');
+    assert.match(document.querySelector('link[rel="icon"][sizes="32x32"]').getAttribute('href'), /^\/assets\/branding\/favicon-32\.png\?v=[a-f0-9]{12}$/);
     assert.equal(document.querySelector('link[rel="icon"][type="image/svg+xml"]'), null);
     const authorLink = document.querySelector('.site-nav a[href="https://merill.net"]');
     assert.equal(authorLink.textContent, 'merill.net');
@@ -247,7 +247,7 @@ test('diff shell provides the timeline, advanced comparison, and share state wit
   assert.doesNotMatch(html, /data-result-history|File history/);
   assert.match(html, /data-result-learn[^>]*aria-label="Open on Microsoft Learn"/);
   assert.match(html, /data-result-github[^>]*aria-label="Open the source on GitHub"/);
-  assert.match(html, /class="microsoft-source-icon" src="\/assets\/icons\/microsoft\.svg"/);
+  assert.match(html, /class="microsoft-source-icon" src="\/assets\/icons\/microsoft\.svg\?v=[a-f0-9]{12}"/);
   assert.doesNotMatch(html, /data-result-path|class="result-path"/);
   assert.doesNotMatch(js, /querySelector\('\[data-result-path\]'\)/);
   assert.equal((html.match(/class="source-links"/g) || []).length, 1);
@@ -368,6 +368,17 @@ test('all local script, stylesheet, and icon references exist in the build', () 
       assert.equal(fs.existsSync(path.join(dist, reference.split(/[?#]/)[0])), true, `${file}: ${reference}`);
     }
   }
+});
+
+test('first-party CSS and JavaScript references carry one deterministic build version', () => {
+  const document = new JSDOM(read('index.html')).window.document;
+  const references = [...document.querySelectorAll('script[src^="/assets/"],link[rel="stylesheet"][href^="/assets/"]')]
+    .map(node => node.getAttribute('src') || node.getAttribute('href'));
+  assert.ok(references.length >= 7);
+  const versions = references.map(reference => new URL(reference, 'https://microsoftx.com').searchParams.get('v'));
+  assert.ok(versions.every(version => /^[a-f0-9]{12}$/.test(version)));
+  assert.equal(new Set(versions).size, 1);
+  assert.match(references.find(reference => reference.startsWith('/assets/diff-app.js')), /^\/assets\/diff-app\.js\?v=/);
 });
 
 test('social preview uses a deployable 1200 by 630 PNG', () => {

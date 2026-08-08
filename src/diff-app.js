@@ -500,11 +500,15 @@
     diffPage.classList.add('is-loading');
     diffPage.dataset.loadingState = phaseNames[selectedIndex];
     loading.hidden = false;
-    loading.querySelector('[data-loading-title]').textContent = selected.title;
-    loading.querySelector('[data-loading-message]').textContent = selected.message;
+    const loadingTitle = loading.querySelector('[data-loading-title]');
+    const loadingMessage = loading.querySelector('[data-loading-message]');
+    if (loadingTitle) loadingTitle.textContent = selected.title;
+    if (loadingMessage) loadingMessage.textContent = selected.message;
     const progress = loading.querySelector('[data-loading-progress]');
-    progress.setAttribute('aria-valuenow', String(selected.progress));
-    progress.setAttribute('aria-valuetext', selected.aria);
+    if (progress) {
+      progress.setAttribute('aria-valuenow', String(selected.progress));
+      progress.setAttribute('aria-valuetext', selected.aria);
+    }
     loading.querySelectorAll('[data-loading-phase]').forEach((item, index) => {
       item.classList.toggle('is-complete', index < selectedIndex);
       item.classList.toggle('is-active', index === selectedIndex);
@@ -872,18 +876,29 @@
 
       document.title = `${title} — Microsoft Docs X-Ray`;
       setCanonical(document, info.publicUrl);
-      diffPage.querySelector('[data-result-title]').textContent = title;
-      diffPage.querySelector('[data-result-source]').textContent = info.sourceLabel;
-      diffPage.querySelector('[data-result-stats]').textContent = isNewFile
-        ? `New page · +${counts.additions} lines added`
-        : `+${counts.additions} / −${counts.deletions} lines ${comparisonDescription(comparison, currentHistory)}`;
-      diffPage.querySelector('[data-result-learn]').href = info.publicUrl;
-      diffPage.querySelector('[data-result-github]').href = githubFileUrl(info, headRef);
+      const resultTitle = diffPage.querySelector('[data-result-title]');
+      const resultSource = diffPage.querySelector('[data-result-source]');
+      const resultStats = diffPage.querySelector('[data-result-stats]');
+      const resultLearn = diffPage.querySelector('[data-result-learn]');
+      const resultGithub = diffPage.querySelector('[data-result-github]');
+      if (resultTitle) resultTitle.textContent = title;
+      if (resultSource) resultSource.textContent = info.sourceLabel;
+      if (resultStats) {
+        resultStats.textContent = isNewFile
+          ? `New page · +${counts.additions} lines added`
+          : `+${counts.additions} / −${counts.deletions} lines ${comparisonDescription(comparison, currentHistory)}`;
+      }
+      if (resultLearn) resultLearn.href = info.publicUrl;
+      if (resultGithub) resultGithub.href = githubFileUrl(info, headRef);
       const explorer = diffPage.querySelector('[data-version-explorer]');
-      explorer.innerHTML = historyExplorer(currentHistory, comparison, historyHasMore);
-      setHistorySelections(explorer, comparison);
-      diffPage.querySelector('[data-visual-diff]').innerHTML = renderVisualDiff(comparison.before, comparison.after, info, baseRef, headRef);
-      diffPage.querySelector('[data-markdown-diff]').innerHTML = renderMarkdownDiff(comparison.before, comparison.after, info, baseRef, headRef);
+      if (explorer) {
+        explorer.innerHTML = historyExplorer(currentHistory, comparison, historyHasMore);
+        setHistorySelections(explorer, comparison);
+      }
+      const visualDiff = diffPage.querySelector('[data-visual-diff]');
+      const markdownDiff = diffPage.querySelector('[data-markdown-diff]');
+      if (visualDiff) visualDiff.innerHTML = renderVisualDiff(comparison.before, comparison.after, info, baseRef, headRef);
+      if (markdownDiff) markdownDiff.innerHTML = renderMarkdownDiff(comparison.before, comparison.after, info, baseRef, headRef);
       intro.hidden = true;
       results.hidden = false;
       retryAfterTokenChange = null;
