@@ -520,8 +520,10 @@ code {
   flex: 0 0 44px;
   display: grid;
   place-items: center;
+  overflow: hidden;
 }
 .product-icon img { width: 40px; height: 40px; object-fit: contain; }
+.product-icon img.aspnet-product-icon { width: 44px; height: 44px; max-width: none; object-fit: cover; object-position: center; transform: scale(1.17); }
 .product-details { min-width: 0; display: grid; gap: .25rem; }
 .product-details strong { overflow: hidden; font-size: .94rem; text-overflow: ellipsis; white-space: nowrap; }
 .product-details code { width: fit-content; max-width: 100%; overflow: hidden; color: var(--text-subtle); font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }

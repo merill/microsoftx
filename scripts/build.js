@@ -8,6 +8,11 @@ const config = require('../src/diff-config');
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
 const srcDir = path.join(rootDir, 'src');
+const productIconDir = path.join(rootDir, 'assets/icons/products');
+const productIconFiles = fs.readdirSync(productIconDir)
+  .filter(file => /\.(?:png|svg|webp)$/i.test(file))
+  .sort()
+  .map(file => path.join(productIconDir, file));
 const canonicalOrigin = normalizeCanonicalOrigin(process.env.CANONICAL_ORIGIN || 'https://microsoftx.com');
 const assetVersion = crypto.createHash('sha256')
   .update([
@@ -17,6 +22,9 @@ const assetVersion = crypto.createHash('sha256')
     path.join(srcDir, 'theme-bootstrap.js'),
     path.join(srcDir, 'diff-config.js'),
     path.join(srcDir, 'diff-app.js'),
+    path.join(rootDir, 'assets/icons/Graph.png'),
+    path.join(rootDir, 'assets/icons/powershell-1324440216431460950_48px.png'),
+    ...productIconFiles,
     path.join(rootDir, 'assets/branding/docs-xray-dex.png'),
     path.join(rootDir, 'assets/branding/docs-xray-dex-compare.png'),
     path.join(rootDir, 'package-lock.json')
@@ -86,29 +94,29 @@ const socialProfiles = [
   ['threads', 'Threads', 'https://www.threads.net/@merillf', icons.threads]
 ];
 
-const msIconsRoot = 'https://raw.githubusercontent.com/DanielBradley1/msicons/3d57443ed4445be9465ee2fee6a6ce6fd02cf90c/msicons/public/icons';
 const productDefinitions = [
-  ['Microsoft Entra', '/entra', 'entra/Microsoft Entra Product Family.svg'],
-  ['Azure', '/azure', 'other/10018-icon-service-Azure-A.svg'],
-  ['Microsoft 365', '/microsoft-365', 'Microsoft/dark-blue-Apps.svg'],
-  ['Microsoft Intune', '/mem', 'intune/Microsoft-intune.svg'],
-  ['Microsoft Graph', '/graph', 'Microsoft/light-blue-Organization Horizontal.svg'],
-  ['Microsoft Fabric', '/fabric', 'fabric/fabric_color.svg'],
-  ['Dynamics 365', '/dynamics365', 'dynamics-365/Dynamics365_scalable.svg'],
-  ['.NET', '/dotnet', 'Microsoft/light-blue-Code.svg'],
-  ['ASP.NET Core', '/aspnet/core', 'app-services/10035-icon-service-App-Services.svg'],
-  ['PowerShell', '/powershell/scripting', 'general/10825-icon-service-Powershell.svg'],
-  ['SQL', '/sql', 'databases/10132-icon-service-SQL-Server.svg'],
-  ['Visual Studio', '/visualstudio', 'Microsoft/light-blue-Window Dev Edit.svg'],
-  ['Windows Server', '/windows-server', 'general/10835-icon-service-Server-Farm.svg']
+  ['Microsoft Entra', '/entra', '/assets/icons/products/microsoft-entra.svg'],
+  ['Azure', '/azure', '/assets/icons/products/azure.svg'],
+  ['Microsoft 365', '/microsoft-365', '/assets/icons/products/microsoft-365.svg'],
+  ['Microsoft Intune', '/mem', '/assets/icons/products/microsoft-intune.svg'],
+  ['Microsoft Graph', '/graph', '/assets/icons/Graph.png'],
+  ['Microsoft Fabric', '/fabric', '/assets/icons/products/microsoft-fabric.svg'],
+  ['Dynamics 365', '/dynamics365', '/assets/icons/products/dynamics-365.svg'],
+  ['.NET', '/dotnet', '/assets/icons/products/dotnet.svg'],
+  ['ASP.NET Core', '/aspnet/core', '/assets/icons/products/aspnet.png', 'aspnet-product-icon'],
+  ['PowerShell', '/powershell/scripting', '/assets/icons/powershell-1324440216431460950_48px.png'],
+  ['SQL', '/sql', '/assets/icons/products/sql-server.svg'],
+  ['Visual Studio', '/visualstudio', '/assets/icons/products/visual-studio.webp'],
+  ['Windows Server', '/windows-server', '/assets/icons/products/windows-server.svg']
 ];
 
 function supportedProductsComponent({ headingId, className = 'section supported-products-section' }) {
   const configuredLabels = new Set(config.sources.map(source => source.label));
   const products = productDefinitions.filter(([label]) => configuredLabels.has(label));
-  const productCards = products.map(([label, learnPath, iconPath]) => {
-    const iconUrl = `${msIconsRoot}/${iconPath.split('/').map(encodeURIComponent).join('/')}`;
-    return `<a class="product-card" href="https://learn.microsoft.com${learnPath}/" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)} documentation on Microsoft Learn"><span class="product-icon" aria-hidden="true"><img src="${iconUrl}" alt="" width="48" height="48" loading="lazy"></span><span class="product-details"><strong>${escapeHtml(label)}</strong><code>${escapeHtml(learnPath)}</code></span></a>`;
+  const productCards = products.map(([label, learnPath, iconPath, iconClass = '']) => {
+    const iconUrl = versionedAsset(iconPath);
+    const imageClass = iconClass ? ` class="${escapeHtml(iconClass)}"` : '';
+    return `<a class="product-card" href="https://learn.microsoft.com${learnPath}/" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(label)} documentation on Microsoft Learn"><span class="product-icon" aria-hidden="true"><img${imageClass} src="${escapeHtml(iconUrl)}" alt="" width="48" height="48" loading="lazy"></span><span class="product-details"><strong>${escapeHtml(label)}</strong><code>${escapeHtml(learnPath)}</code></span></a>`;
   }).join('');
   return `<section class="${className}" data-supported-products aria-labelledby="${headingId}"><div class="section-heading"><span class="eyebrow">Supported documentation</span><h2 id="${headingId}">Microsoft Learn areas with X-ray vision.</h2><p>${products.length} product areas are mapped to their public documentation source.</p></div><div class="product-grid">${productCards}</div><div class="product-grid-footer"><a href="/supported/">Mapping details and limitations →</a></div></section>`;
 }
@@ -462,6 +470,11 @@ function build() {
   copy(path.join(rootDir, 'assets/branding/maester-cloud-drift.png'), 'assets/branding/maester-cloud-drift.png');
   copy(path.join(rootDir, 'assets/icons/microsoft.svg'), 'assets/icons/microsoft.svg');
   copy(path.join(rootDir, 'assets/icons/github.svg'), 'assets/icons/github.svg');
+  copy(path.join(rootDir, 'assets/icons/Graph.png'), 'assets/icons/Graph.png');
+  copy(path.join(rootDir, 'assets/icons/powershell-1324440216431460950_48px.png'), 'assets/icons/powershell-1324440216431460950_48px.png');
+  for (const productIconFile of productIconFiles) {
+    copy(productIconFile, `assets/icons/products/${path.basename(productIconFile)}`);
+  }
   copy(path.join(rootDir, 'node_modules/marked/lib/marked.umd.js'), 'assets/vendor/marked.js');
   copy(path.join(rootDir, 'node_modules/diff/dist/diff.min.js'), 'assets/vendor/diff.min.js');
   copy(path.join(rootDir, 'node_modules/node-htmldiff/js/htmldiff.js'), 'assets/vendor/htmldiff.js');

@@ -186,7 +186,32 @@ test('home page replaces How it works with every supported Learn product and pat
     'Windows Server': '/windows-server'
   });
   assert.ok(cards.every(card => card.querySelector('img[loading="lazy"][alt=""]')));
-  assert.ok(cards.every(card => card.querySelector('img').src.startsWith('https://raw.githubusercontent.com/DanielBradley1/msicons/3d57443')));
+  const productIconPaths = {
+    'Microsoft Entra': '/assets/icons/products/microsoft-entra.svg',
+    'Azure': '/assets/icons/products/azure.svg',
+    'Microsoft 365': '/assets/icons/products/microsoft-365.svg',
+    'Microsoft Intune': '/assets/icons/products/microsoft-intune.svg',
+    'Microsoft Graph': '/assets/icons/Graph.png',
+    'Microsoft Fabric': '/assets/icons/products/microsoft-fabric.svg',
+    'Dynamics 365': '/assets/icons/products/dynamics-365.svg',
+    '.NET': '/assets/icons/products/dotnet.svg',
+    'ASP.NET Core': '/assets/icons/products/aspnet.png',
+    'PowerShell': '/assets/icons/powershell-1324440216431460950_48px.png',
+    'SQL': '/assets/icons/products/sql-server.svg',
+    'Visual Studio': '/assets/icons/products/visual-studio.webp',
+    'Windows Server': '/assets/icons/products/windows-server.svg'
+  };
+  for (const card of cards) {
+    const label = card.querySelector('strong').textContent;
+    const iconPath = productIconPaths[label];
+    const iconSource = card.querySelector('img').getAttribute('src');
+    assert.equal(iconSource.replace(/\?v=[a-f0-9]{12}$/, ''), iconPath);
+    assert.match(iconSource, /\?v=[a-f0-9]{12}$/);
+    assert.ok(fs.existsSync(path.join(dist, iconPath.slice(1))), iconPath);
+  }
+  const aspNetIcon = homeProducts.querySelector('.product-card[href="https://learn.microsoft.com/aspnet/core/"] img');
+  assert.ok(aspNetIcon.classList.contains('aspnet-product-icon'));
+  assert.match(read('assets/site.css'), /\.product-icon img\.aspnet-product-icon \{[^}]*object-fit: cover;[^}]*transform: scale\(1\.17\);/);
   assert.doesNotMatch(document.body.textContent, /Product icons from MS Icons/);
   assert.equal(document.querySelectorAll('#supported-heading').length, 1);
   assert.deepEqual(
