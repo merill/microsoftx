@@ -116,8 +116,9 @@ test('home page offers a one-click sample diff on the active site origin', () =>
   const sample = document.querySelector('[data-home-sample-link]');
   assert.ok(sample);
   assert.equal(sample.textContent.trim(), 'View Microsoft 365 sample');
-  assert.equal(sample.getAttribute('href'), '/en-us/microsoft-365/admin/setup/setup');
+  assert.equal(sample.getAttribute('href'), '/en-us/microsoft-365/admin/manage/agent-shadow-ai?_mx_head=11263cbdebfa30cdab477f989fa59f08bffb544a');
   assert.ok(sample.classList.contains('button-secondary'));
+  assert.match(sample.closest('form').querySelector('.form-help').textContent, /substantial 49-line Microsoft 365 content revision/);
 });
 
 test('home page starts with a compact direct URL shortcut', () => {

@@ -131,7 +131,7 @@ The build uses `https://microsoftx.com` as the indexed SEO origin by default. Se
 - every configured documentation area;
 - Defender docsets and dynamic MicrosoftDocs source validation;
 - Microsoft Graph query-specific mappings;
-- the SMS/voice retirement example;
+- the pinned Microsoft 365 Shadow AI sample revision;
 - unsafe path rejection and HTML sanitization;
 - GitHub-origin token enforcement;
 - latest and exact revision loading;
