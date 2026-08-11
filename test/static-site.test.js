@@ -400,6 +400,12 @@ test('About, Supported, and Privacy pages contain the promised durable content',
   const aboutHtml = read('about/index.html');
   const aboutDocument = new JSDOM(aboutHtml).window.document;
   assert.match(aboutHtml, /Why it exists/);
+  assert.match(aboutHtml, /Build and share a diff URL/);
+  assert.match(aboutHtml, /https:\/\/microsoftx\.com\/en-us\/microsoft-365\/admin\/manage\/agent-shadow-ai/);
+  assert.match(aboutHtml, /_mx_base=&lt;older-sha&gt;&amp;_mx_head=&lt;newer-sha&gt;/);
+  assert.match(aboutHtml, /https%3A%2F%2Faspire\.dev%2Fget-started%2Fwhat-is-aspire%2F/);
+  assert.equal(aboutDocument.querySelector('.page-toc a[href="#share"]').textContent, 'Share a diff');
+  assert.equal(aboutDocument.querySelectorAll('.share-url-example').length, 3);
   assert.match(aboutHtml, /Built by Merill/);
   assert.match(aboutHtml, /Explore more tools by Merill/);
   assert.equal(aboutDocument.querySelector('.author-avatar').getAttribute('src'), '/assets/branding/merill-profile.jpeg');
