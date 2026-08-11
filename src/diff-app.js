@@ -10,7 +10,7 @@
   const MINIMUM_LOADING_DURATION = 2000;
   const VIEW_NAMES = new Set(['visual', 'markdown']);
   const LOADING_PHASES = Object.freeze({
-    mapping: { progress: 12, title: 'Dex is tracing the source.', message: 'Matching this Microsoft Learn address to its public documentation repository.', aria: 'Mapping the documentation page' },
+    mapping: { progress: 12, title: 'Dex is tracing the source.', message: 'Matching this documentation address to its public source repository.', aria: 'Mapping the documentation page' },
     history: { progress: 38, title: 'Dex is reading the page history.', message: 'Finding the revisions that changed this documentation page.', aria: 'Reading the documentation history' },
     revisions: { progress: 72, title: 'Dex is fetching both versions.', message: 'Loading the before and after versions of the page.', aria: 'Fetching both documentation versions' },
     rendering: { progress: 94, title: 'Dex is building your X-ray view.', message: 'Sanitizing the Markdown and calculating the visual and source diffs in this browser.', aria: 'Rendering the page comparison' }
@@ -128,10 +128,16 @@
   function diffUrlForLearnUrl(value, pageHref) {
     let input;
     try { input = new URL(String(value || '').trim()); } catch {
-      throw unsupportedDocumentationError('Enter a complete Microsoft Learn URL, including https://.');
+      throw unsupportedDocumentationError('Enter a complete documentation URL, including https://.');
     }
-    if (input.protocol !== 'https:' || input.hostname.toLowerCase() !== 'learn.microsoft.com') {
-      throw unsupportedDocumentationError('Use an https://learn.microsoft.com article URL.');
+    const hostname = input.hostname.toLowerCase();
+    const hasSafeOrigin = input.protocol === 'https:' && !input.port && !input.username && !input.password;
+    const isLearnUrl = hasSafeOrigin && hostname === 'learn.microsoft.com';
+    const isConfiguredSite = hasSafeOrigin && configuredSources().some(source => {
+      try { return new URL(source.siteUrl).hostname.toLowerCase() === hostname; } catch { return false; }
+    });
+    if (!isLearnUrl && !isConfiguredSite) {
+      throw unsupportedDocumentationError('Use a supported HTTPS documentation article URL.');
     }
     let pageUrl;
     try { pageUrl = new URL(pageHref || root.location?.href); } catch {
@@ -139,9 +145,13 @@
     }
     if (!isAllowedSiteOrigin(pageUrl)) throw new Error('Docs X-Ray requires HTTPS outside local development.');
     const target = new URL('/', pageUrl.origin);
-    target.pathname = input.pathname;
-    target.search = input.search;
-    target.hash = input.hash;
+    if (isLearnUrl) {
+      target.pathname = input.pathname;
+      target.search = input.search;
+      target.hash = input.hash;
+    } else {
+      target.searchParams.set('url', input.href);
+    }
     return target.href;
   }
 
@@ -184,9 +194,11 @@
   function siteUrlToRepoInfo(value, sourceConfigs = configuredSources()) {
     let url;
     try { url = new URL(String(value || '').trim()); } catch {
-      throw unsupportedDocumentationError('Enter a complete Microsoft Learn URL, including https://.');
+      throw unsupportedDocumentationError('Enter a complete documentation URL, including https://.');
     }
-    if (url.protocol !== 'https:') throw unsupportedDocumentationError('Documentation URLs must use https://.');
+    if (url.protocol !== 'https:' || url.port || url.username || url.password) {
+      throw unsupportedDocumentationError('Documentation URLs must use a standard HTTPS origin without credentials.');
+    }
     const inputSegments = url.pathname.split('/').filter(Boolean).map(decodePathSegment);
     let match = null;
 
@@ -212,7 +224,7 @@
       break;
     }
 
-    if (!match) throw unsupportedDocumentationError(`This Microsoft Learn path is not supported yet: ${url.pathname}`);
+    if (!match) throw unsupportedDocumentationError(`This documentation path is not supported yet: ${url.pathname}`);
     const { source, site, repository, articleSegments } = match;
     const finalIndex = articleSegments.length - 1;
     articleSegments[finalIndex] = articleSegments[finalIndex].replace(/\.(?:mdx?|html?)$/i, '');
@@ -235,6 +247,7 @@
     return {
       sourceId: source.id,
       sourceLabel: source.label,
+      siteLabel: source.siteLabel || (site.hostname.toLowerCase() === 'learn.microsoft.com' ? 'Microsoft Learn' : site.hostname),
       publicUrl: url.href,
       siteRoot: site.href.endsWith('/') ? site.href : `${site.href}/`,
       owner,
@@ -242,11 +255,103 @@
       repository: `${owner}/${repo}`,
       defaultBranch,
       path,
+      sourceResolution: source.sourceResolution || 'static',
       apiRoot: `https://api.github.com/repos/${owner}/${repo}`,
       githubRoot,
       githubUrl: `${githubRoot}/blob/${encodeURIComponent(defaultBranch)}/${path}`,
       historyUrl: `${githubRoot}/commits/${encodeURIComponent(defaultBranch)}/${path}`
     };
+  }
+
+  function microsoftDocsSourceToRepoInfo(publicValue, sourceValue) {
+    let publicUrl;
+    let sourceUrl;
+    try {
+      publicUrl = new URL(String(publicValue || '').trim());
+      sourceUrl = new URL(String(sourceValue || '').trim());
+    } catch {
+      throw unsupportedDocumentationError('Microsoft Learn returned an invalid public source URL.');
+    }
+    if (publicUrl.protocol !== 'https:' || publicUrl.hostname.toLowerCase() !== 'learn.microsoft.com') {
+      throw unsupportedDocumentationError('Only https://learn.microsoft.com article URLs are supported.');
+    }
+    if (
+      sourceUrl.protocol !== 'https:' ||
+      sourceUrl.hostname.toLowerCase() !== 'github.com' ||
+      sourceUrl.port ||
+      sourceUrl.username ||
+      sourceUrl.password ||
+      sourceUrl.search ||
+      sourceUrl.hash
+    ) {
+      throw unsupportedDocumentationError('Microsoft Learn returned an unsupported public source URL.');
+    }
+
+    const segments = sourceUrl.pathname.split('/').filter(Boolean);
+    if (segments.length < 5 || segments[2].toLowerCase() !== 'blob') {
+      throw unsupportedDocumentationError('Microsoft Learn returned an unsupported public source URL.');
+    }
+    const owner = decodePathSegment(segments[0]);
+    const repo = decodePathSegment(segments[1]);
+    const defaultBranch = decodePathSegment(segments[3]);
+    const path = segments.slice(4).map(decodePathSegment).join('/');
+    if (owner.toLowerCase() !== 'microsoftdocs' || !/^[a-z0-9._-]+$/i.test(repo)) {
+      throw unsupportedDocumentationError('The public source is not in the MicrosoftDocs organization.');
+    }
+    if (!/\.(?:mdx?|markdown|ya?ml)$/i.test(path)) {
+      throw unsupportedDocumentationError('The public source is not a supported documentation file.');
+    }
+
+    const githubRoot = `https://github.com/${owner}/${repo}`;
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+    return {
+      sourceId: 'microsoftdocs-resolved',
+      sourceLabel: `${owner}/${repo}`,
+      siteLabel: 'Microsoft Learn',
+      publicUrl: publicUrl.href,
+      siteRoot: 'https://learn.microsoft.com/',
+      owner,
+      repo,
+      repository: `${owner}/${repo}`,
+      defaultBranch,
+      path,
+      sourceResolution: 'resolved',
+      apiRoot: `https://api.github.com/repos/${owner}/${repo}`,
+      githubRoot,
+      githubUrl: `${githubRoot}/blob/${encodeURIComponent(defaultBranch)}/${encodedPath}`,
+      historyUrl: `${githubRoot}/commits/${encodeURIComponent(defaultBranch)}/${encodedPath}`
+    };
+  }
+
+  async function resolvedMicrosoftDocsSource(value, fetchImpl = root.fetch) {
+    if (typeof fetchImpl !== 'function') throw new Error('Microsoft Learn source lookup is unavailable.');
+    const base = root.location?.origin || 'https://microsoftx.invalid';
+    const endpoint = new URL('/api/resolve-source', base);
+    endpoint.searchParams.set('url', String(value || '').trim());
+    const response = await fetchImpl(endpoint.href, { headers: { Accept: 'application/json' } });
+    let payload = {};
+    try { payload = await response.json(); } catch {}
+    if (response.status === 400 || response.status === 404) {
+      throw unsupportedDocumentationError(payload.error || 'This Microsoft Learn path does not expose a public MicrosoftDocs source.');
+    }
+    if (!response.ok) throw new Error(payload.error || `Microsoft Learn source lookup returned ${response.status}.`);
+    return microsoftDocsSourceToRepoInfo(value, payload.sourceUrl);
+  }
+
+  async function resolveSiteUrlToRepoInfo(value, sourceConfigs = configuredSources(), fetchImpl = root.fetch) {
+    let configured = null;
+    let configuredError = null;
+    try { configured = siteUrlToRepoInfo(value, sourceConfigs); } catch (error) {
+      configuredError = error;
+      if (!isUnsupportedDocumentationError(error)) throw error;
+    }
+    if (configured && configured.sourceResolution !== 'verify') return configured;
+
+    try { return await resolvedMicrosoftDocsSource(value, fetchImpl); } catch (error) {
+      if (configured) return configured;
+      if (isUnsupportedDocumentationError(error) && configuredError) throw configuredError;
+      throw error;
+    }
   }
 
   function apiPath(path) {
@@ -310,10 +415,10 @@
     if (!candidate || candidate.startsWith('#')) return candidate;
     if (/^(https?:|mailto:|javascript:|data:|vbscript:)/i.test(candidate)) return safeExternalUrl(candidate);
     if (candidate.startsWith('~/')) {
-      try { return new URL(candidate.slice(2).replace(/\.md(?=($|[?#]))/i, ''), info.siteRoot).href; } catch { return ''; }
+      try { return new URL(candidate.slice(2).replace(/\.mdx?(?=($|[?#]))/i, ''), info.siteRoot).href; } catch { return ''; }
     }
     if (candidate.startsWith('/')) {
-      try { return new URL(candidate.replace(/\.md(?=($|[?#]))/i, ''), 'https://learn.microsoft.com').href; } catch { return ''; }
+      try { return new URL(candidate.replace(/\.mdx?(?=($|[?#]))/i, ''), info.siteRoot).href; } catch { return ''; }
     }
     if (type === 'src') {
       const directory = info.path.split('/').slice(0, -1).join('/');
@@ -324,7 +429,7 @@
       publicBase.hash = '';
       publicBase.search = '';
       publicBase.pathname = `${publicBase.pathname.slice(0, publicBase.pathname.lastIndexOf('/') + 1)}`;
-      return new URL(candidate.replace(/\.md(?=($|[?#]))/i, ''), publicBase).href;
+      return new URL(candidate.replace(/\.mdx?(?=($|[?#]))/i, ''), publicBase).href;
     } catch { return ''; }
   }
 
@@ -666,7 +771,7 @@
       const dateLabel = index === 0 ? `Current version · ${formattedDate}` : formattedDate;
       return `<li class="version-event${selected ? ' selected' : ''}${index === 0 ? ' current' : ''}"><span class="version-node" aria-hidden="true"></span><button type="button" data-history-from="${escapeHtml(commit.sha)}" aria-pressed="${selected}"><span class="version-date">${escapeHtml(dateLabel)}${role ? `<em>${role}</em>` : ''}</span><strong>${escapeHtml(firstLine(commit.commit?.message) || 'Documentation update')}</strong><small>${action}</small></button></li>`;
     }).join('');
-    return `<section class="version-explorer" aria-labelledby="version-history-heading"><header><div><span class="eyebrow">Version history</span><h2 id="version-history-heading">Choose a point in time</h2><p>Select any change to compare that version with the current page.</p></div><button class="share-view-button" type="button" data-share-view aria-label="Copy link to this view" title="Copy link to this view"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 15 5c0 .18.02.36.05.53L8.91 9.06A3 3 0 0 0 7 8.35a3 3 0 1 0 1.91 5.59l6.14 3.53A3 3 0 0 0 15 18a3 3 0 1 0 .83-2.07L9.7 12.4a3.1 3.1 0 0 0 0-.8l6.13-3.53A3 3 0 0 0 18 8Z"/></svg></button></header><div class="version-layout"><div><ol class="version-timeline" data-version-timeline>${timeline}</ol>${hasMore ? '<button class="load-history-button" type="button" data-load-older>Load older versions</button>' : ''}</div><aside class="comparison-controls"><span class="eyebrow">Current comparison</span><div class="comparison-range" data-comparison-summary>${comparisonSummary(comparison)}</div><button class="latest-change-button" type="button" data-compare-latest>Show latest change</button><details><summary>Advanced: compare any two versions</summary><div class="advanced-comparison"><label>Earlier version<select data-comparison-base>${options}</select></label><label>Later version<select data-comparison-head>${options}</select></label><button class="button-primary" type="button" data-compare-selected>Compare selected versions</button><p data-comparison-error role="status"></p></div></details><p class="share-view-status" data-share-status role="status" aria-live="polite"></p></aside></div></section>`;
+    return `<section class="version-explorer" id="versions" aria-labelledby="version-history-heading"><header><div><span class="eyebrow">Version history</span><h2 id="version-history-heading">Choose a point in time</h2><p>Select any change to compare that version with the current page.</p></div><button class="share-view-button" type="button" data-share-view aria-label="Copy link to this view" title="Copy link to this view"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 15 5c0 .18.02.36.05.53L8.91 9.06A3 3 0 0 0 7 8.35a3 3 0 1 0 1.91 5.59l6.14 3.53A3 3 0 0 0 15 18a3 3 0 1 0 .83-2.07L9.7 12.4a3.1 3.1 0 0 0 0-.8l6.13-3.53A3 3 0 0 0 18 8Z"/></svg></button></header><div class="version-layout"><div><ol class="version-timeline" data-version-timeline>${timeline}</ol>${hasMore ? '<button class="load-history-button" type="button" data-load-older>Load older versions</button>' : ''}</div><aside class="comparison-controls"><span class="eyebrow">Current comparison</span><div class="comparison-range" data-comparison-summary>${comparisonSummary(comparison)}</div><button class="latest-change-button" type="button" data-compare-latest>Show latest change</button><details><summary>Advanced: compare any two versions</summary><div class="advanced-comparison"><label>Earlier version<select data-comparison-base>${options}</select></label><label>Later version<select data-comparison-head>${options}</select></label><button class="button-primary" type="button" data-compare-selected>Compare selected versions</button><p data-comparison-error role="status"></p></div></details><p class="share-view-status" data-share-status role="status" aria-live="polite"></p></aside></div></section>`;
   }
 
   function setHistorySelections(container, comparison) {
@@ -864,7 +969,6 @@
         event.preventDefault();
         try {
           const value = homeForm.elements.url.value;
-          siteUrlToRepoInfo(value);
           const shortcut = diffUrlForLearnUrl(value, root.location.href);
           root.location.assign(shortcut);
         } catch (error) {
@@ -991,7 +1095,7 @@
       const headRef = comparison.headCommit.sha;
       const baseRef = comparison.baseCommit?.sha || '';
       const isNewFile = !String(comparison.before || '').trim() && Boolean(String(comparison.after || '').trim());
-      const title = extractTitle(comparison.after, info.path.split('/').pop().replace(/\.md$/i, ''));
+      const title = extractTitle(comparison.after, info.path.split('/').pop().replace(/\.mdx?$/i, ''));
 
       document.title = `${title} — Microsoft Docs X-Ray`;
       setCanonical(document, info.publicUrl);
@@ -1008,6 +1112,13 @@
           : `+${counts.additions} / −${counts.deletions} lines ${comparisonDescription(comparison, currentHistory)}`;
       }
       if (resultLearn) resultLearn.href = info.publicUrl;
+      if (resultLearn) {
+        const siteLabel = info.siteLabel || 'Documentation';
+        resultLearn.setAttribute('aria-label', `Open on ${siteLabel}`);
+        resultLearn.setAttribute('title', `Open on ${siteLabel}`);
+        const label = resultLearn.querySelector('span');
+        if (label) label.textContent = siteLabel;
+      }
       if (resultGithub) resultGithub.href = githubFileUrl(info, headRef);
       const explorer = diffPage.querySelector('[data-version-explorer]');
       if (explorer) {
@@ -1121,10 +1232,17 @@
           root.location.assign(diffUrlForLearnUrl(value, root.location.href));
           return;
         }
-        currentInfo = siteUrlToRepoInfo(value);
+        currentInfo = await resolveSiteUrlToRepoInfo(value);
         setLoadingSurface(diffPage, 'history');
         historyPage = 1;
         currentHistory = await loadHistory(currentInfo, savedToken());
+        if (!currentHistory.length && currentInfo.sourceResolution !== 'resolved') {
+          const resolvedInfo = await resolveSiteUrlToRepoInfo(value, [], root.fetch);
+          if (resolvedInfo.repository !== currentInfo.repository || resolvedInfo.path !== currentInfo.path || resolvedInfo.defaultBranch !== currentInfo.defaultBranch) {
+            currentInfo = resolvedInfo;
+            currentHistory = await loadHistory(currentInfo, savedToken());
+          }
+        }
         if (!currentHistory.length) {
           throw missingSourceHistoryError(currentInfo.path);
         }
@@ -1182,6 +1300,8 @@
     showMissingSourcePage,
     historyExplorer,
     siteUrlToRepoInfo,
+    microsoftDocsSourceToRepoInfo,
+    resolveSiteUrlToRepoInfo,
     githubFileUrl,
     extractTitle,
     stripFrontMatter,

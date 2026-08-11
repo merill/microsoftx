@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const distDir = path.resolve(__dirname, '..', 'dist');
 const port = Number(process.env.PORT || 4173);
+const sourceResolver = import('../src/learn-source-resolver.mjs');
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -30,8 +31,32 @@ function resolveFile(urlPath) {
   return path.join(distDir, 'index.html');
 }
 
-const server = http.createServer((request, response) => {
-  const pathname = new URL(request.url, `http://${request.headers.host || 'localhost'}`).pathname;
+function sendJson(response, status, body) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff'
+  });
+  response.end(`${JSON.stringify(body)}\n`);
+}
+
+const server = http.createServer(async (request, response) => {
+  const requestUrl = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+  const pathname = requestUrl.pathname;
+  if (pathname === '/api/resolve-source') {
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { error: 'Method not allowed.' });
+      return;
+    }
+    try {
+      const { resolveLearnSource } = await sourceResolver;
+      const result = await resolveLearnSource(requestUrl.searchParams.get('url'), fetch, AbortSignal.timeout(8000));
+      sendJson(response, 200, result);
+    } catch (error) {
+      sendJson(response, Number(error?.status) || 500, { error: error?.message || 'Microsoft Learn source lookup failed.' });
+    }
+    return;
+  }
   const file = resolveFile(pathname);
   if (!file || !fs.existsSync(file)) {
     response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

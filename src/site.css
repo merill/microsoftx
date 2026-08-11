@@ -754,16 +754,18 @@ body.diff-loading-open { overflow: hidden; }
   padding: 2rem 0 1.4rem;
 }
 .result-head h2 { margin: .3rem 0 .45rem; font-size: clamp(1.6rem, 3.2vw, 2.7rem); letter-spacing: -.03em; line-height: 1.12; }
+.result-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .source-links { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .55rem; }
 .source-links a { min-height: 30px; display: inline-flex; align-items: center; gap: .38rem; border-radius: 5px; color: var(--text-subtle); padding: .2rem .35rem; font-size: .78rem; font-weight: 650; text-decoration: none; }
 .source-links a:hover { background: var(--canvas-subtle); color: var(--accent); }
 .source-links img { width: 16px; height: 16px; display: block; object-fit: contain; }
 [data-theme="dark"] .source-links img { filter: invert(1); }
 .source-links .microsoft-source-icon, [data-theme="dark"] .source-links .microsoft-source-icon { filter: none; }
+.mobile-versions-link { display: none; }
 .diff-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 370px); align-items: start; gap: 1.25rem; margin-top: 2rem; }
 .diff-content { min-width: 0; margin-top: 0; }
 .version-sidebar { position: sticky; top: 98px; max-height: calc(100vh - 118px); overflow-y: auto; scrollbar-width: thin; }
-.version-explorer { border: 1px solid var(--border); background: var(--canvas-subtle); }
+.version-explorer { scroll-margin-top: 4rem; border: 1px solid var(--border); background: var(--canvas-subtle); }
 .version-explorer > header {
   position: relative;
   border-bottom: 1px solid var(--border);
@@ -1112,6 +1114,7 @@ body.diff-loading-open { overflow: hidden; }
   .diff-loading-progress { margin-top: 1.4rem; }
   .diff-loading-steps { grid-template-columns: 1fr 1fr; gap: .65rem 1rem; }
   .source-links a { min-height: 32px; }
+  .mobile-versions-link { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .3rem; min-height: 32px; font-size: .8rem; font-weight: 700; }
   .version-layout > div, .comparison-controls { padding: .85rem; }
   .version-timeline { max-height: 430px; }
   .diff-heading { align-items: start; flex-direction: column; }

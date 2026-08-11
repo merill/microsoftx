@@ -10,6 +10,7 @@ These product icons are bundled so Microsoft Docs X-Ray does not depend on third
 | `microsoft-intune.svg` | https://github.com/DanielBradley1/msicons/blob/3d57443ed4445be9465ee2fee6a6ce6fd02cf90c/msicons/public/icons/intune/Microsoft-intune.svg |
 | `microsoft-fabric.svg` | https://github.com/DanielBradley1/msicons/blob/3d57443ed4445be9465ee2fee6a6ce6fd02cf90c/msicons/public/icons/fabric/fabric_color.svg |
 | `dynamics-365.svg` | https://github.com/DanielBradley1/msicons/blob/3d57443ed4445be9465ee2fee6a6ce6fd02cf90c/msicons/public/icons/dynamics-365/Dynamics365_scalable.svg |
+| `power-apps.svg` | https://github.com/DanielBradley1/msicons/blob/main/msicons/public/icons/power-platform/PowerApps_scalable.svg |
 | `dotnet.svg` | https://uxwing.com/microsoft-dot-net-icon/ |
 | `aspnet.png` | https://learn.microsoft.com/en-us/windows/images/aspnet.png |
 | `sql-server.svg` | https://github.com/DanielBradley1/msicons/blob/3d57443ed4445be9465ee2fee6a6ce6fd02cf90c/msicons/public/icons/databases/10132-icon-service-SQL-Server.svg |

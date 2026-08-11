@@ -1,6 +1,6 @@
 # Cloudflare setup and launch checklist
 
-The application itself is fully static. Cloudflare account settings are intentionally kept outside the repository because they belong to the primary and alternative domain zones.
+The application is static except for the narrowly scoped Microsoft Learn source-lookup Function in `functions/api/resolve-source.js`. Cloudflare account settings are intentionally kept outside the repository because they belong to the primary and alternative domain zones.
 
 The zone is already delegated to Cloudflare nameservers. No production DNS records were present when the project was created.
 
@@ -29,7 +29,7 @@ Connect `merill/microsoftx` through the Cloudflare Pages Git integration.
 | Root directory | repository root |
 | Node.js | 20 or later |
 
-Do not add a Pages Function, `_worker.js`, or Worker route. Pages should serve only the files produced in `dist/`.
+Cloudflare Pages discovers the root `functions/` directory during the Git-integrated build. The generated `dist/_routes.json` invokes Functions only for `/api/*`, so ordinary pages and assets bypass the Functions runtime. Do not add a `_worker.js` or a separate Worker route.
 
 The project deliberately has no `404.html`. Pages therefore serves the root `index.html` for an unmatched navigation such as:
 
@@ -48,7 +48,7 @@ Use one alternative apex hostname, represented below as `alternative.example`.
 1. Add `alternative.example` under the existing Pages project's **Custom domains**.
 2. Complete any DNS ownership steps shown by Pages and wait for the domain and certificate to become **Active**.
 3. Do not redirect the alternative hostname to `microsoftx.com`.
-4. Do not create a separate Pages project, build, Worker, or Pages Function.
+4. Do not create a separate Pages project, build, Worker, or additional Pages Function. The same checked-in source-lookup Function serves every custom domain on this project.
 
 The alternative hostname serves both the marketing site and portable diff URLs:
 
@@ -138,9 +138,9 @@ Set `X-Robots-Tag` to `noindex, nofollow` for every response. The alternative is
 ## 7. HTTPS and security
 
 - Turn on **Always Use HTTPS** for the zone after both certificates are active.
-- Leave the Pages-generated `_headers` file enabled. It restricts scripts to same-origin assets plus the UserJot SDK, and browser API connections to `api.github.com` and the UserJot widget service.
+- Leave the Pages-generated `_headers` file enabled. It restricts scripts to same-origin assets plus the UserJot SDK, and browser API connections to the same-origin source lookup, `api.github.com`, and the UserJot widget service.
 - Keep `script-src` free of broad exceptions such as `unsafe-inline` and `unsafe-eval`. The generated `style-src` permits inline styles because the UserJot widget injects its interface styles at runtime.
-- Do not put a shared GitHub token in Pages environment variables. The static application has no legitimate use for one.
+- Do not put a shared GitHub token in Pages environment variables. The source lookup does not call GitHub and has no legitimate use for one.
 - Optional GitHub tokens are scoped by the browser to the exact origin. A user who switches to the alternative domain must add the token again there.
 
 ## 8. Production verification
@@ -150,6 +150,7 @@ Run these checks after the first custom-domain deployment.
 ```bash
 curl -I https://microsoftx.com/
 curl -I https://microsoftx.com/about/
+curl 'https://microsoftx.com/api/resolve-source?url=https%3A%2F%2Flearn.microsoft.com%2Fen-us%2Fdefender-endpoint%2Fmicrosoft-defender-endpoint'
 curl -I https://learn.microsoftx.com/en-us/entra/identity/authentication/concept-sms-voice-retirement
 curl -I https://www.microsoftx.com/test?discard=me
 curl -I https://alternative.example/
@@ -165,7 +166,8 @@ Expected results:
 - The alternative homepage and static pages return `200`, remain on the alternative hostname, and load all first-party scripts, styles, images, and navigation from that same origin.
 - The alternative deep path remains in the address bar, loads the same Entra comparison, and returns `X-Robots-Tag: noindex, nofollow`.
 - The browser loads the example diff and links to `MicrosoftDocs/entra-docs` at `docs/identity/authentication/concept-sms-voice-retirement.md`.
+- The source endpoint returns `MicrosoftDocs/defender-docs`, branch `public`, and `defender-endpoint/microsoft-defender-endpoint.md`; requests for non-Learn hosts are rejected.
 - `https://microsoftx.com/sitemap.xml` lists only the four apex static pages.
-- Browser developer tools show GitHub data requests going directly to `api.github.com`; no comparison data is posted to Microsoft Docs X-Ray.
+- Browser developer tools show source lookup going to the same origin and GitHub data requests going directly to `api.github.com`; no GitHub history, revisions, diffs, or optional token are posted to the lookup Function.
 
 After these checks, change the wildcard redirect from `302` to `301` and submit the apex sitemap to the desired search-engine webmaster tools.

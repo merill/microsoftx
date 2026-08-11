@@ -40,6 +40,156 @@
         fileExtension: '.md'
       },
       {
+        id: 'defender-for-identity',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-for-identity/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-for-identity',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-for-iot-azure',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/azure/defender-for-iot/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-for-iot-azure',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-for-cloud',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/azure/defender-for-cloud/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-for-cloud',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-easm',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/azure/external-attack-surface-management/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'easm',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-sentinel',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/azure/sentinel/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'sentinel',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-business',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-business/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-business',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-cloud-apps',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-cloud-apps/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-for-cloud-apps',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-endpoint',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-endpoint/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-endpoint',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-for-iot',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-for-iot/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-for-iot',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-office-365',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-office-365/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-office-365',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-vulnerability-management',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-vulnerability-management/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-vulnerability-management',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'defender-xdr',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/defender-xdr/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'defender-xdr',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'security-exposure-management',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/security-exposure-management/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'exposure-management',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'unified-secops',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/unified-secops/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'unified-secops-platform',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
+        id: 'unified-secops-platform-legacy',
+        label: 'Microsoft Defender',
+        siteUrl: 'https://learn.microsoft.com/unified-secops-platform/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/defender-docs',
+        repositoryPathPrefix: 'unified-secops-platform',
+        defaultBranch: 'public',
+        fileExtension: '.md'
+      },
+      {
         id: 'fabric-get-started',
         label: 'Microsoft Fabric',
         siteUrl: 'https://learn.microsoft.com/fabric/get-started/',
@@ -77,7 +227,32 @@
         repositoryUrl: 'https://github.com/MicrosoftDocs/azure-docs',
         repositoryPathPrefix: 'articles',
         defaultBranch: 'main',
-        fileExtension: '.md'
+        fileExtension: '.md',
+        sourceResolution: 'verify'
+      },
+      {
+        id: 'aspire-docs',
+        label: 'Aspire',
+        siteLabel: 'Aspire',
+        siteUrl: 'https://aspire.dev/',
+        repositoryUrl: 'https://github.com/microsoft/aspire.dev',
+        repositoryPathPrefix: 'src/frontend/src/content/docs',
+        defaultBranch: 'main',
+        fileExtension: '.mdx'
+      },
+      {
+        id: 'aspire-learn-legacy',
+        label: 'Aspire',
+        siteLabel: 'Aspire',
+        siteUrl: 'https://learn.microsoft.com/dotnet/aspire/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/microsoft/aspire.dev',
+        repositoryPathPrefix: 'src/frontend/src/content/docs',
+        defaultBranch: 'main',
+        fileExtension: '.mdx',
+        pathAliases: {
+          'get-started/aspire-overview': 'get-started/what-is-aspire'
+        }
       },
       {
         id: 'dotnet-learn',
@@ -107,7 +282,8 @@
         repositoryUrl: 'https://github.com/MicrosoftDocs/microsoft-365-docs',
         repositoryPathPrefix: 'microsoft-365',
         defaultBranch: 'public',
-        fileExtension: '.md'
+        fileExtension: '.md',
+        sourceResolution: 'verify'
       },
       {
         id: 'intune-direct-learn',
@@ -147,7 +323,19 @@
         repositoryUrl: 'https://github.com/MicrosoftDocs/dynamics365hubpages',
         repositoryPathPrefix: 'dynamics365',
         defaultBranch: 'live',
-        fileExtension: '.md'
+        fileExtension: '.md',
+        sourceResolution: 'verify'
+      },
+      {
+        id: 'power-apps-learn',
+        label: 'Power Apps',
+        siteUrl: 'https://learn.microsoft.com/power-apps/',
+        stripLocale: true,
+        repositoryUrl: 'https://github.com/MicrosoftDocs/powerapps-docs',
+        repositoryPathPrefix: 'powerapps-docs',
+        defaultBranch: 'main',
+        fileExtension: '.md',
+        sourceResolution: 'verify'
       },
       {
         id: 'sql-learn',
@@ -157,7 +345,8 @@
         repositoryUrl: 'https://github.com/MicrosoftDocs/sql-docs',
         repositoryPathPrefix: 'docs',
         defaultBranch: 'live',
-        fileExtension: '.md'
+        fileExtension: '.md',
+        sourceResolution: 'verify'
       },
       {
         id: 'graph-concepts',

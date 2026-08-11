@@ -27,6 +27,8 @@ const {
   isMissingSourceHistoryError,
   historyExplorer,
   siteUrlToRepoInfo,
+  microsoftDocsSourceToRepoInfo,
+  resolveSiteUrlToRepoInfo,
   sanitizeRenderedHtml,
   renderVisualDiff,
   renderMarkdownDiff,
@@ -68,7 +70,7 @@ test('any secure site origin supports portable paths while site routes remain la
   );
 });
 
-test('Learn URLs convert to same-origin portable diff paths and reject other sites', () => {
+test('supported documentation URLs convert to same-origin diff routes and reject other sites', () => {
   assert.equal(
     diffUrlForLearnUrl('https://learn.microsoft.com/en-us/entra/identity/example?tabs=portal#step-1', 'https://alternative.example/'),
     'https://alternative.example/en-us/entra/identity/example?tabs=portal#step-1'
@@ -77,8 +79,14 @@ test('Learn URLs convert to same-origin portable diff paths and reject other sit
     shortcutUrlForLearnUrl('https://learn.microsoft.com/en-us/entra/identity/example', 'https://learn.microsoftx.com/'),
     'https://learn.microsoftx.com/en-us/entra/identity/example'
   );
-  assert.throws(() => shortcutUrlForLearnUrl('https://example.com/article'), /learn\.microsoft\.com/);
-  assert.throws(() => shortcutUrlForLearnUrl('http://learn.microsoft.com/article'), /https:\/\/learn\.microsoft\.com/);
+  assert.equal(
+    diffUrlForLearnUrl('https://aspire.dev/get-started/what-is-aspire/', 'https://alternative.example/'),
+    'https://alternative.example/?url=https%3A%2F%2Faspire.dev%2Fget-started%2Fwhat-is-aspire%2F'
+  );
+  assert.throws(() => shortcutUrlForLearnUrl('https://example.com/article'), /supported HTTPS documentation/);
+  assert.throws(() => shortcutUrlForLearnUrl('http://learn.microsoft.com/article'), /supported HTTPS documentation/);
+  assert.throws(() => shortcutUrlForLearnUrl('https://user@aspire.dev/article'), /supported HTTPS documentation/);
+  assert.throws(() => siteUrlToRepoInfo('https://aspire.dev:444/article'), /standard HTTPS origin/);
   assert.throws(
     () => diffUrlForLearnUrl('https://learn.microsoft.com/en-us/entra/example', 'http://alternative.example/'),
     /requires HTTPS/
@@ -143,6 +151,7 @@ test('the current version shows its last-changed date in history controls', () =
   };
   const html = historyExplorer([current, previous], { headCommit: current, baseCommit: previous }, false);
   const document = new JSDOM(html).window.document;
+  assert.equal(document.querySelector('.version-explorer').id, 'versions');
   const currentDate = document.querySelector('.version-event.current .version-date').textContent;
   const currentOption = document.querySelector('[data-comparison-head] option').textContent;
   assert.match(currentDate, /^Current version · .*2026/);
@@ -311,11 +320,13 @@ test('representative configured docsets map to their public repositories', () =>
     ['https://learn.microsoft.com/en-us/azure/virtual-machines/linux/quick-create-cli', 'MicrosoftDocs/azure-compute-docs', 'articles/virtual-machines/linux/quick-create-cli.md', 'main'],
     ['https://learn.microsoft.com/en-us/azure/azure-functions/functions-overview', 'MicrosoftDocs/azure-docs', 'articles/azure-functions/functions-overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/dotnet/core/introduction', 'dotnet/docs', 'docs/core/introduction.md', 'main'],
+    ['https://aspire.dev/get-started/what-is-aspire/', 'microsoft/aspire.dev', 'src/frontend/src/content/docs/get-started/what-is-aspire.mdx', 'main'],
     ['https://learn.microsoft.com/en-us/powershell/scripting/overview', 'MicrosoftDocs/PowerShell-Docs', 'reference/docs-conceptual/overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/microsoft-365/admin/setup/setup', 'MicrosoftDocs/microsoft-365-docs', 'microsoft-365/admin/setup/setup.md', 'public'],
     ['https://learn.microsoft.com/en-us/mem/intune/fundamentals/what-is-intune', 'MicrosoftDocs/memdocs', 'intune/fundamentals/what-is-intune.md', 'main'],
     ['https://learn.microsoft.com/en-us/fabric/get-started/microsoft-fabric-overview', 'MicrosoftDocs/fabric-docs', 'docs/fundamentals/microsoft-fabric-overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/dynamics365/get-started/intro-crossapp-index', 'MicrosoftDocs/dynamics365hubpages', 'dynamics365/get-started/intro-crossapp-index.md', 'live'],
+    ['https://learn.microsoft.com/en-us/power-apps/powerapps-overview', 'MicrosoftDocs/powerapps-docs', 'powerapps-docs/powerapps-overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/sql/sql-server/what-s-new-in-sql-server-2025', 'MicrosoftDocs/sql-docs', 'docs/sql-server/what-s-new-in-sql-server-2025.md', 'live'],
     ['https://learn.microsoft.com/en-us/graph/overview', 'microsoftgraph/microsoft-graph-docs-contrib', 'concepts/overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/visualstudio/ide/whats-new-visual-studio-2022', 'MicrosoftDocs/visualstudio-docs', 'docs/ide/whats-new-visual-studio-2022.md', 'main'],
@@ -328,6 +339,89 @@ test('representative configured docsets map to their public repositories', () =>
     assert.equal(info.path, path, url);
     assert.equal(info.defaultBranch, branch, url);
   }
+});
+
+test('legacy Aspire Learn URLs map to the current Aspire MDX source', () => {
+  const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/dotnet/aspire/get-started/aspire-overview');
+  assert.equal(info.repository, 'microsoft/aspire.dev');
+  assert.equal(info.path, 'src/frontend/src/content/docs/get-started/what-is-aspire.mdx');
+  assert.equal(info.defaultBranch, 'main');
+  assert.equal(info.siteLabel, 'Aspire');
+});
+
+test('Defender Learn areas map to the defender-docs public branch and exact source folders', () => {
+  const examples = [
+    ['https://learn.microsoft.com/en-us/defender-for-identity/what-is', 'defender-for-identity/what-is.md'],
+    ['https://learn.microsoft.com/en-us/azure/defender-for-iot/organizations/overview', 'defender-for-iot-azure/organizations/overview.md'],
+    ['https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-cloud-introduction', 'defender-for-cloud/defender-for-cloud-introduction.md'],
+    ['https://learn.microsoft.com/en-us/azure/external-attack-surface-management/overview', 'easm/overview.md'],
+    ['https://learn.microsoft.com/en-us/azure/sentinel/overview', 'sentinel/overview.md'],
+    ['https://learn.microsoft.com/en-us/defender-business/mdb-overview', 'defender-business/mdb-overview.md'],
+    ['https://learn.microsoft.com/en-us/defender-cloud-apps/what-is-defender-for-cloud-apps', 'defender-for-cloud-apps/what-is-defender-for-cloud-apps.md'],
+    ['https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint', 'defender-endpoint/microsoft-defender-endpoint.md'],
+    ['https://learn.microsoft.com/en-us/defender-for-iot/get-started', 'defender-for-iot/get-started.md'],
+    ['https://learn.microsoft.com/en-us/defender-office-365/mdo-about', 'defender-office-365/mdo-about.md'],
+    ['https://learn.microsoft.com/en-us/defender-vulnerability-management/defender-vulnerability-management', 'defender-vulnerability-management/defender-vulnerability-management.md'],
+    ['https://learn.microsoft.com/en-us/defender-xdr/microsoft-365-defender', 'defender-xdr/microsoft-365-defender.md'],
+    ['https://learn.microsoft.com/en-us/security-exposure-management/microsoft-security-exposure-management', 'exposure-management/microsoft-security-exposure-management.md'],
+    ['https://learn.microsoft.com/en-us/unified-secops/overview-unified-security', 'unified-secops-platform/overview-unified-security.md']
+  ];
+  for (const [url, path] of examples) {
+    const info = siteUrlToRepoInfo(url, config.sources);
+    assert.equal(info.repository, 'MicrosoftDocs/defender-docs', url);
+    assert.equal(info.defaultBranch, 'public', url);
+    assert.equal(info.path, path, url);
+  }
+});
+
+test('unconfigured MicrosoftDocs pages resolve from validated Learn source metadata', async () => {
+  let requested;
+  const fetcher = async endpoint => {
+    requested = new URL(String(endpoint));
+    return new Response(JSON.stringify({
+      sourceUrl: 'https://github.com/MicrosoftDocs/terminal/blob/main/terminal/get-started.md'
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const learnUrl = 'https://learn.microsoft.com/en-us/windows/terminal/get-started';
+  const info = await resolveSiteUrlToRepoInfo(learnUrl, config.sources, fetcher);
+  assert.equal(requested.pathname, '/api/resolve-source');
+  assert.equal(requested.searchParams.get('url'), learnUrl);
+  assert.equal(info.repository, 'MicrosoftDocs/terminal');
+  assert.equal(info.defaultBranch, 'main');
+  assert.equal(info.path, 'terminal/get-started.md');
+  assert.equal(info.sourceResolution, 'resolved');
+});
+
+test('source verification can override broad configured routes while a lookup outage falls back safely', async () => {
+  const learnUrl = 'https://learn.microsoft.com/en-us/azure/ai-services/what-are-ai-services';
+  const resolved = await resolveSiteUrlToRepoInfo(learnUrl, config.sources, async () => new Response(JSON.stringify({
+    sourceUrl: 'https://github.com/MicrosoftDocs/azure-ai-docs/blob/main/articles/ai-services/what-are-ai-services.md'
+  }), { status: 200, headers: { 'content-type': 'application/json' } }));
+  assert.equal(resolved.repository, 'MicrosoftDocs/azure-ai-docs');
+  assert.equal(resolved.path, 'articles/ai-services/what-are-ai-services.md');
+
+  const fallback = await resolveSiteUrlToRepoInfo(learnUrl, config.sources, async () => new Response(JSON.stringify({
+    error: 'Temporary lookup failure.'
+  }), { status: 503, headers: { 'content-type': 'application/json' } }));
+  assert.equal(fallback.repository, 'MicrosoftDocs/azure-docs');
+  assert.equal(fallback.sourceResolution, 'verify');
+});
+
+test('resolved source metadata rejects repositories outside MicrosoftDocs and unsafe paths', () => {
+  assert.throws(
+    () => microsoftDocsSourceToRepoInfo(
+      'https://learn.microsoft.com/en-us/windows/terminal/get-started',
+      'https://github.com/example/docs/blob/main/get-started.md'
+    ),
+    /MicrosoftDocs organization/
+  );
+  assert.throws(
+    () => microsoftDocsSourceToRepoInfo(
+      'https://learn.microsoft.com/en-us/windows/terminal/get-started',
+      'https://github.com/MicrosoftDocs/terminal/blob/main/bad%2Fpath.md'
+    ),
+    /unsafe path segment/
+  );
 });
 
 test('query-specific Graph mappings distinguish beta and v1', () => {

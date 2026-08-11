@@ -13,7 +13,7 @@ function read(relativePath) {
 }
 
 test('build emits static SEO pages and intentionally omits a 404 page', () => {
-  for (const file of ['index.html', 'about/index.html', 'supported/index.html', 'privacy/index.html', 'robots.txt', 'sitemap.xml', '_headers']) {
+  for (const file of ['index.html', 'about/index.html', 'supported/index.html', 'privacy/index.html', 'robots.txt', 'sitemap.xml', '_headers', '_routes.json']) {
     assert.equal(fs.existsSync(path.join(dist, file)), true, file);
   }
   assert.equal(fs.existsSync(path.join(dist, '404.html')), false);
@@ -115,8 +115,8 @@ test('home page offers a one-click sample diff on the active site origin', () =>
   const document = new JSDOM(read('index.html')).window.document;
   const sample = document.querySelector('[data-home-sample-link]');
   assert.ok(sample);
-  assert.equal(sample.textContent.trim(), 'View sample diff');
-  assert.equal(sample.getAttribute('href'), '/en-us/entra/identity/authentication/concept-sms-voice-retirement');
+  assert.equal(sample.textContent.trim(), 'View Microsoft 365 sample');
+  assert.equal(sample.getAttribute('href'), '/en-us/microsoft-365/admin/setup/setup');
   assert.ok(sample.classList.contains('button-secondary'));
 });
 
@@ -126,7 +126,7 @@ test('home page starts with a compact direct URL shortcut', () => {
   const shortcut = marketing.querySelector('.home-quick-compare');
   assert.ok(shortcut);
   assert.equal(shortcut.nextElementSibling.className, 'hero');
-  assert.equal(shortcut.querySelector('input').placeholder, 'Paste a Microsoft Learn URL');
+  assert.equal(shortcut.querySelector('input').placeholder, 'Paste a supported docs URL');
   assert.equal(shortcut.querySelector('button').textContent, 'View diff');
   assert.equal(marketing.querySelectorAll('[data-home-url-form]').length, 2);
   assert.match(read('assets/diff-app.js'), /querySelectorAll\('\[data-home-url-form\]'\)\.forEach/);
@@ -169,16 +169,19 @@ test('home page replaces How it works with every supported Learn product and pat
   assert.equal(document.querySelector('.privacy-callout'), null);
   assert.doesNotMatch(document.body.textContent, /How it works/);
   assert.doesNotMatch(document.body.textContent, /Private by architecture/);
-  assert.equal(cards.length, 13);
+  assert.equal(cards.length, 16);
   assert.deepEqual(products, {
     'Microsoft Entra': '/entra',
     'Azure': '/azure',
     'Microsoft 365': '/microsoft-365',
+    'Microsoft Defender': '/defender-xdr',
     'Microsoft Intune': '/intune + /mem',
     'Microsoft Graph': '/graph',
     'Microsoft Fabric': '/fabric',
     'Dynamics 365': '/dynamics365',
+    'Power Apps': '/power-apps',
     '.NET': '/dotnet',
+    'Aspire': 'aspire.dev',
     'ASP.NET Core': '/aspnet/core',
     'PowerShell': '/powershell/scripting',
     'SQL': '/sql',
@@ -190,11 +193,14 @@ test('home page replaces How it works with every supported Learn product and pat
     'Microsoft Entra': '/assets/icons/products/microsoft-entra.svg',
     'Azure': '/assets/icons/products/azure.svg',
     'Microsoft 365': '/assets/icons/products/microsoft-365.svg',
+    'Microsoft Defender': '/assets/icons/microsoft.svg',
     'Microsoft Intune': '/assets/icons/products/microsoft-intune.svg',
     'Microsoft Graph': '/assets/icons/Graph.png',
     'Microsoft Fabric': '/assets/icons/products/microsoft-fabric.svg',
     'Dynamics 365': '/assets/icons/products/dynamics-365.svg',
+    'Power Apps': '/assets/icons/products/power-apps.svg',
     '.NET': '/assets/icons/products/dotnet.svg',
+    'Aspire': '/assets/icons/products/dotnet.svg',
     'ASP.NET Core': '/assets/icons/products/aspnet.png',
     'PowerShell': '/assets/icons/powershell-1324440216431460950_48px.png',
     'SQL': '/assets/icons/products/sql-server.svg',
@@ -211,6 +217,7 @@ test('home page replaces How it works with every supported Learn product and pat
   }
   const aspNetIcon = homeProducts.querySelector('.product-card[href="https://learn.microsoft.com/aspnet/core/"] img');
   assert.ok(aspNetIcon.classList.contains('aspnet-product-icon'));
+  assert.ok(homeProducts.querySelector('.product-card[href="https://aspire.dev/"]'));
   assert.match(read('assets/site.css'), /\.product-icon img\.aspnet-product-icon \{[^}]*object-fit: cover;[^}]*transform: scale\(1\.17\);/);
   assert.doesNotMatch(document.body.textContent, /Product icons from MS Icons/);
   assert.equal(document.querySelectorAll('#supported-heading').length, 1);
@@ -230,7 +237,7 @@ test('unsupported documentation has a simple reusable product view', () => {
   assert.equal(homeButton.getAttribute('href'), '/');
   assert.ok(homeButton.hasAttribute('data-unsupported-back'));
   assert.equal(homeButton.textContent, 'Go back');
-  assert.equal(page.querySelectorAll('[data-supported-products] .product-card').length, 13);
+  assert.equal(page.querySelectorAll('[data-supported-products] .product-card').length, 16);
   assert.equal(page.querySelector('header, footer'), null);
   assert.match(read('assets/site.css'), /\.unsupported-message h1 \{[^}]*font-size: clamp\(2\.5rem, 5\.4vw, 5rem\)/);
 });
@@ -360,6 +367,8 @@ test('diff shell provides the timeline, advanced comparison, and share state wit
   assert.doesNotMatch(html, /data-result-history|File history/);
   assert.match(html, /data-result-learn[^>]*aria-label="Open on Microsoft Learn"/);
   assert.match(html, /data-result-github[^>]*aria-label="Open the source on GitHub"/);
+  assert.equal(document.querySelector('.mobile-versions-link').getAttribute('href'), '#versions');
+  assert.equal(document.querySelector('.mobile-versions-link').textContent.trim(), 'Versions ↓');
   assert.match(html, /class="microsoft-source-icon" src="\/assets\/icons\/microsoft\.svg\?v=[a-f0-9]{12}"/);
   assert.doesNotMatch(html, /data-result-path|class="result-path"/);
   assert.doesNotMatch(js, /querySelector\('\[data-result-path\]'\)/);
@@ -381,6 +390,8 @@ test('diff shell provides the timeline, advanced comparison, and share state wit
   assert.match(css, /\.diff-workspace \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(330px, 370px\)/);
   assert.match(css, /\.version-sidebar \{ position: sticky;/);
   assert.match(css, /@media \(max-width: 1100px\) \{[\s\S]*\.version-sidebar \{ position: static; order: 0;/);
+  assert.match(css, /\.mobile-versions-link \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*\.mobile-versions-link \{ display: inline-flex;/);
   assert.doesNotMatch(css, /\.visual-blame|\.blame-row|\.version-meta/);
 });
 
@@ -394,8 +405,15 @@ test('About, Supported, and Privacy pages contain the promised durable content',
   assert.equal(aboutDocument.querySelector('.author-avatar').getAttribute('alt'), 'Merill Fernando');
   assert.equal(fs.existsSync(path.join(dist, 'assets/branding/merill-profile.jpeg')), true);
   assert.match(read('supported/index.html'), /MicrosoftDocs\/entra-docs/);
+  assert.match(read('supported/index.html'), /MicrosoftDocs\/defender-docs/);
+  assert.match(read('supported/index.html'), /microsoft\/aspire\.dev/);
+  assert.match(read('supported/index.html'), /MicrosoftDocs\/powerapps-docs/);
+  assert.ok(new JSDOM(read('supported/index.html')).window.document.querySelector('a[href="/?url=https%3A%2F%2Faspire.dev%2Fget-started%2Fwhat-is-aspire%2F"]'));
+  assert.match(read('supported/index.html'), /MicrosoftDocs organization coverage/);
   assert.match(read('supported/index.html'), /graph-rest-beta/);
   assert.match(read('privacy/index.html'), /api\.github\.com/);
+  assert.match(read('privacy/index.html'), /source-lookup Function/);
+  assert.match(read('privacy/index.html'), /does not receive GitHub history/);
   assert.match(read('privacy/index.html'), /localStorage/);
   assert.match(read('privacy/index.html'), /origin-scoped/);
   assert.match(read('privacy/index.html'), /do not share it with another Docs X-Ray domain/);
@@ -489,7 +507,7 @@ test('sitemap contains only apex static pages and robots points to it', () => {
   assert.match(read('robots.txt'), /Sitemap: https:\/\/microsoftx\.com\/sitemap\.xml/);
 });
 
-test('Pages headers enforce the browser-only security boundary', () => {
+test('Pages headers and routes enforce the browser and edge security boundaries', () => {
   const headers = read('_headers');
   assert.match(headers, /connect-src 'self' https:\/\/api\.github\.com https:\/\/widget\.userjot\.com/);
   assert.match(headers, /script-src 'self' https:\/\/cdn\.userjot\.com/);
@@ -499,6 +517,10 @@ test('Pages headers enforce the browser-only security boundary', () => {
   const scriptPolicy = headers.match(/script-src [^;]+/)?.[0] || '';
   assert.doesNotMatch(scriptPolicy, /unsafe-inline|unsafe-eval/);
   assert.doesNotMatch(headers, /unsafe-eval/);
+  assert.deepEqual(JSON.parse(read('_routes.json')), { version: 1, include: ['/api/*'], exclude: [] });
+  const sourceFunction = fs.readFileSync(path.join(root, 'functions/api/resolve-source.js'), 'utf8');
+  assert.match(sourceFunction, /resolveLearnSource/);
+  assert.match(sourceFunction, /AbortSignal\.timeout\(8000\)/);
 });
 
 test('all local script, stylesheet, and icon references exist in the build', () => {
