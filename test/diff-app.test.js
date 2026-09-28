@@ -36,8 +36,13 @@ const {
   continuousMarkdownDiffGroups,
   request,
   loadHistory,
+  loadSourceHistory,
   validateComparisonRefs,
-  loadComparison
+  loadComparison,
+  loadRequestedComparison,
+  resolveContentUrl,
+  extractTitle,
+  markdownForRendering
 } = require('../src/diff-app');
 
 test('shortcut host reconstructs the Learn URL and separates MicrosoftX revisions', () => {
@@ -349,7 +354,7 @@ test('legacy Aspire Learn URLs map to the current Aspire MDX source', () => {
   assert.equal(info.siteLabel, 'Aspire');
 });
 
-test('Defender Learn areas map to the defender-docs public branch and exact source folders', () => {
+test('Defender Learn areas map to the Learn mirror of defender-docs with its exact source folders', () => {
   const examples = [
     ['https://learn.microsoft.com/en-us/defender-for-identity/what-is', 'defender-for-identity/what-is.md'],
     ['https://learn.microsoft.com/en-us/azure/defender-for-iot/organizations/overview', 'defender-for-iot-azure/organizations/overview.md'],
@@ -368,9 +373,123 @@ test('Defender Learn areas map to the defender-docs public branch and exact sour
   ];
   for (const [url, path] of examples) {
     const info = siteUrlToRepoInfo(url, config.sources);
-    assert.equal(info.repository, 'MicrosoftDocs/defender-docs', url);
-    assert.equal(info.defaultBranch, 'public', url);
+    // MicrosoftDocs/defender-docs is no longer public; its mirror keeps its layout.
+    assert.equal(info.repository, 'merill/defender-docs-mirror', url);
+    assert.equal(info.defaultBranch, 'main', url);
     assert.equal(info.path, path, url);
+    assert.equal(info.mirroredFrom, 'MicrosoftDocs/defender-docs', url);
+    assert.equal(info.mirror, undefined, url);
+  }
+});
+
+test('a fallback mirror rides along with a source that is still public', () => {
+  const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/fundamentals/whats-new', config.sources);
+  assert.equal(info.repository, 'MicrosoftDocs/entra-docs');
+  assert.equal(info.path, 'docs/fundamentals/whats-new.md');
+  assert.equal(info.mirror.repository, 'merill/entra-docs-mirror');
+  assert.equal(info.mirror.path, 'docs/fundamentals/whats-new.md');
+  assert.equal(info.mirror.defaultBranch, 'main');
+  assert.equal(info.mirror.apiRoot, 'https://api.github.com/repos/merill/entra-docs-mirror');
+  assert.equal(info.mirror.mirror, undefined);
+});
+
+test('a resolved source is mirrored too, with YAML landing pages mapped to Markdown', () => {
+  const info = microsoftDocsSourceToRepoInfo(
+    'https://learn.microsoft.com/en-us/defender-xdr/',
+    'https://github.com/MicrosoftDocs/defender-docs/blob/public/defender-xdr/index.yml'
+  );
+  assert.equal(info.repository, 'merill/defender-docs-mirror');
+  assert.equal(info.path, 'defender-xdr/index.md');
+  assert.equal(info.sourceLabel, 'merill/defender-docs-mirror');
+  assert.equal(info.githubUrl, 'https://github.com/merill/defender-docs-mirror/blob/main/defender-xdr/index.md');
+});
+
+test('a mirror that is not on GitHub is ignored', () => {
+  const mirrors = [{ repository: 'MicrosoftDocs/entra-docs', mirrorUrl: 'https://evil.example/entra', mode: 'replace' }];
+  const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/fundamentals/whats-new', config.sources, mirrors);
+  assert.equal(info.repository, 'MicrosoftDocs/entra-docs');
+  assert.equal(info.mirror, undefined);
+});
+
+test('images on a mirrored page load from Learn, and the Learn title suffix is dropped', () => {
+  const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-releases', config.sources);
+  const ref = 'c'.repeat(40);
+  assert.equal(resolveContentUrl('media/releases/new.png', info, ref, 'src'), 'https://learn.microsoft.com/en-us/defender-endpoint/media/releases/new.png');
+  const original = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/fundamentals/whats-new', config.sources);
+  assert.match(resolveContentUrl('media/whats-new/new.png', original, ref, 'src'), /^https:\/\/raw\.githubusercontent\.com\/MicrosoftDocs\/entra-docs\//);
+  assert.equal(extractTitle('---\ntitle: Release notes - Microsoft Defender | Microsoft Learn\n---\n# Release notes\n', 'x'), 'Release notes - Microsoft Defender');
+  assert.equal(markdownForRendering('# Release notes - Microsoft Defender | Microsoft Learn\n\nBody\n'), '# Release notes - Microsoft Defender\n\nBody\n');
+});
+
+function githubStub(routes) {
+  return async endpoint => {
+    const url = String(endpoint);
+    for (const [match, respond] of routes) if (url.includes(match)) return respond(url);
+    return new Response(JSON.stringify({ message: `Unexpected request ${url}` }), { status: 500 });
+  };
+}
+
+test('history moves to the fallback mirror when the original repository has gone private', async () => {
+  const originalFetch = global.fetch;
+  const head = 'd'.repeat(40);
+  global.fetch = githubStub([
+    ['/repos/MicrosoftDocs/entra-docs/', () => new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 })],
+    ['/repos/merill/entra-docs-mirror/commits?path=', () => new Response(JSON.stringify([{ sha: head }]), { status: 200 })]
+  ]);
+  try {
+    const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/fundamentals/whats-new', config.sources);
+    const loaded = await loadSourceHistory(info, '');
+    assert.equal(loaded.info.repository, 'merill/entra-docs-mirror');
+    assert.equal(loaded.history[0].sha, head);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('a revision recorded from the mirror opens from the mirror while the original is public', async () => {
+  const originalFetch = global.fetch;
+  const upstream = 'e'.repeat(40);
+  const head = 'f'.repeat(40);
+  const base = '1'.repeat(40);
+  global.fetch = githubStub([
+    ['/repos/MicrosoftDocs/entra-docs/commits/', () => new Response(JSON.stringify({ message: 'No commit found for SHA' }), { status: 422 })],
+    ['/repos/merill/entra-docs-mirror/commits?path=', () => new Response(JSON.stringify([{ sha: head, parents: [{ sha: base }] }, { sha: base }]), { status: 200 })],
+    [`/repos/merill/entra-docs-mirror/contents/docs/fundamentals/whats-new.md?ref=${head}`, () => new Response('# After\n', { status: 200 })],
+    [`/repos/merill/entra-docs-mirror/contents/docs/fundamentals/whats-new.md?ref=${base}`, () => new Response('# Before\n', { status: 200 })]
+  ]);
+  try {
+    const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/entra/fundamentals/whats-new', config.sources);
+    const loaded = await loadRequestedComparison(info, '', { base, head }, [{ sha: upstream }]);
+    assert.equal(loaded.info.repository, 'merill/entra-docs-mirror');
+    assert.equal(loaded.comparison.headCommit.sha, head);
+    assert.equal(loaded.comparison.after, '# After\n');
+    assert.equal(loaded.comparison.before, '# Before\n');
+    assert.equal(loaded.notice, undefined);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('a revision from a repository the mirror replaced shows the latest change with a notice', async () => {
+  const originalFetch = global.fetch;
+  const head = '2'.repeat(40);
+  const base = '3'.repeat(40);
+  const gone = '4'.repeat(40);
+  global.fetch = githubStub([
+    [`/commits/${gone}`, () => new Response(JSON.stringify({ message: 'No commit found for SHA' }), { status: 422 })],
+    [`?ref=${head}`, () => new Response('# After\n', { status: 200 })],
+    [`?ref=${base}`, () => new Response('# Before\n', { status: 200 })]
+  ]);
+  try {
+    const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-releases', config.sources);
+    const history = [{ sha: head }, { sha: base }];
+    const loaded = await loadRequestedComparison(info, '', { head: gone }, history);
+    assert.equal(loaded.info.repository, 'merill/defender-docs-mirror');
+    assert.equal(loaded.comparison.headCommit.sha, head);
+    assert.match(loaded.notice, /MicrosoftDocs\/defender-docs, which is no longer public/);
+    assert.match(loaded.notice, /since 2026-09-28/);
+  } finally {
+    global.fetch = originalFetch;
   }
 });
 
@@ -599,6 +718,26 @@ test('rate-limit errors appear only when GitHub reports exhaustion', async () =>
       () => request('https://api.github.com/repos/example/docs', ''),
       error => error.rateLimited === true && /anonymous API limit/.test(error.message)
     );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('a page first recorded by the mirror baseline is shown unchanged, but a page added later is new', async () => {
+  const originalFetch = global.fetch;
+  const baseline = '5'.repeat(40);
+  const added = '6'.repeat(40);
+  global.fetch = githubStub([
+    ['?ref=', () => new Response('# Page\n\nBody\n', { status: 200 })]
+  ]);
+  try {
+    const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-releases', config.sources);
+    const atBaseline = await loadComparison(info, '', null, [{ sha: baseline, commit: { author: { date: '2026-09-28T04:35:52Z' } } }]);
+    assert.equal(atBaseline.mirrorBaseline, true);
+    assert.equal(atBaseline.before, atBaseline.after);
+    const later = await loadComparison(info, '', null, [{ sha: added, commit: { author: { date: '2026-09-29T08:00:00Z' } } }]);
+    assert.equal(later.mirrorBaseline, undefined);
+    assert.equal(later.before, '');
   } finally {
     global.fetch = originalFetch;
   }
