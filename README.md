@@ -48,9 +48,11 @@ repository's layout, so a source's path maps to the mirror unchanged.
 | `MicrosoftDocs/entra-docs` | [`merill/entra-docs-mirror`](https://github.com/merill/entra-docs-mirror) | `fallback` |
 
 - **`replace`** uses the mirror outright. The original is gone.
-- **`archived`** uses the mirror for the page and its history. The original
-  still serves the revisions from before mirroring began, which Daily Intune
-  News links to. If a page has not changed since its mirror baseline, Docs
+- **`archived`** uses the mirror for the page and its history. The revisions
+  from before mirroring began, which Daily Intune News links to, come from
+  `archiveUrl`: [`merill/memdocs`](https://github.com/merill/memdocs), a fork
+  of the archived original that keeps its history reachable if Microsoft
+  makes `memdocs` private. If a page has not changed since its mirror baseline, Docs
   X-Ray shows the page's last change in the archived original, with a notice.
 - **`fallback`** reads the original while it is public, and moves to the mirror
   in two cases. One is when GitHub answers 404, which is how a repository that

@@ -332,19 +332,18 @@
   // diff-config.js). A 'replace' mirror stands in for the source outright; a
   // 'fallback' mirror rides along as `info.mirror` for when GitHub cannot serve
   // the original.
-  function applyMirror(info, mirrors = configuredMirrors()) {
-    const mirror = mirrors.find(entry => String(entry?.repository || '').toLowerCase() === info.repository.toLowerCase());
-    if (!mirror) return info;
-    let mirrorUrl;
-    try { mirrorUrl = new URL(mirror.mirrorUrl); } catch { return info; }
-    const parts = mirrorUrl.pathname.split('/').filter(Boolean);
-    if (mirrorUrl.protocol !== 'https:' || mirrorUrl.hostname.toLowerCase() !== 'github.com' || parts.length !== 2) return info;
-    const [owner, repo] = parts;
-    // The mirror stores every page as Markdown, including Learn's YAML landing pages.
-    const path = info.path.replace(/\.ya?ml$/i, '.md');
-    const defaultBranch = mirror.defaultBranch || 'main';
+  function githubRepositoryParts(value) {
+    let url;
+    try { url = new URL(value); } catch { return null; }
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (url.protocol !== 'https:' || url.hostname.toLowerCase() !== 'github.com' || parts.length !== 2) return null;
+    return parts;
+  }
+
+  // The same page, read from another repository with the same layout.
+  function repointInfo(info, [owner, repo], defaultBranch, path) {
     const githubRoot = `https://github.com/${owner}/${repo}`;
-    const mirrored = {
+    return {
       ...info,
       owner,
       repo,
@@ -355,14 +354,33 @@
       apiRoot: `https://api.github.com/repos/${owner}/${repo}`,
       githubRoot,
       githubUrl: `${githubRoot}/blob/${encodeURIComponent(defaultBranch)}/${apiPath(path)}`,
-      historyUrl: `${githubRoot}/commits/${encodeURIComponent(defaultBranch)}/${apiPath(path)}`,
+      historyUrl: `${githubRoot}/commits/${encodeURIComponent(defaultBranch)}/${apiPath(path)}`
+    };
+  }
+
+  function applyMirror(info, mirrors = configuredMirrors()) {
+    const mirror = mirrors.find(entry => String(entry?.repository || '').toLowerCase() === info.repository.toLowerCase());
+    if (!mirror) return info;
+    const mirrorParts = githubRepositoryParts(mirror.mirrorUrl);
+    if (!mirrorParts) return info;
+    // The mirror stores every page as Markdown, including Learn's YAML landing pages.
+    const mirrored = {
+      ...repointInfo(info, mirrorParts, mirror.defaultBranch || 'main', info.path.replace(/\.ya?ml$/i, '.md')),
       mirroredFrom: info.repository,
       mirrorSince: mirror.since || '',
       mirrorBaselineThrough: mirror.baselineThrough || '',
       assetsFromLearn: true
     };
     if (mirror.mode === 'replace') return mirrored;
-    if (mirror.mode === 'archived') return { ...mirrored, archive: info, archivedOn: mirror.archivedOn || '' };
+    if (mirror.mode === 'archived') {
+      // A copy of the archived original (a fork, say) keeps its history
+      // reachable should the original itself go private.
+      const copyParts = mirror.archiveUrl ? githubRepositoryParts(mirror.archiveUrl) : null;
+      const archive = copyParts
+        ? { ...repointInfo(info, copyParts, mirror.archiveBranch || info.defaultBranch, info.path), archiveOf: info.repository }
+        : info;
+      return { ...mirrored, archive, archivedOn: mirror.archivedOn || '' };
+    }
     return { ...info, mirror: mirrored };
   }
 
@@ -652,7 +670,7 @@
             info: info.archive,
             history: archiveHistory,
             comparison: archived,
-            notice: `Microsoft Learn has not changed this page since mirroring began${info.mirrorSince ? ` on ${info.mirrorSince}` : ''}. This is its last change in ${info.archive.repository} before it was archived${archivedOn}.`
+            notice: `Microsoft Learn has not changed this page since mirroring began${info.mirrorSince ? ` on ${info.mirrorSince}` : ''}. This is its last change in ${info.archive.archiveOf || info.archive.repository} before it was archived${archivedOn}.`
           };
         }
       } catch (archiveError) {
