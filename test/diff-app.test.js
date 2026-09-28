@@ -305,12 +305,18 @@ test('the supplied Entra article maps to the expected public repository path', (
   assert.equal(info.defaultBranch, 'main');
 });
 
-test('current and legacy Intune routes map to the same memdocs source file', () => {
+test('current and legacy Intune routes map to the same source file in the memdocs mirror', () => {
   const article = 'fundamentals/role-based-access-control/multi-admin-approval';
   const current = siteUrlToRepoInfo(`https://learn.microsoft.com/en-us/intune/${article}`);
   const legacy = siteUrlToRepoInfo(`https://learn.microsoft.com/en-us/mem/intune/${article}`);
+  // MicrosoftDocs/memdocs is archived: the mirror serves the page, and the
+  // archived original serves the revisions from before mirroring began.
   assert.deepEqual(
     [current.repository, current.path, current.defaultBranch],
+    ['merill/intune-docs-mirror', `intune/${article}.md`, 'main']
+  );
+  assert.deepEqual(
+    [current.archive.repository, current.archive.path, current.archive.defaultBranch],
     ['MicrosoftDocs/memdocs', `intune/${article}.md`, 'main']
   );
   assert.deepEqual(
@@ -328,7 +334,7 @@ test('representative configured docsets map to their public repositories', () =>
     ['https://aspire.dev/get-started/what-is-aspire/', 'microsoft/aspire.dev', 'src/frontend/src/content/docs/get-started/what-is-aspire.mdx', 'main'],
     ['https://learn.microsoft.com/en-us/powershell/scripting/overview', 'MicrosoftDocs/PowerShell-Docs', 'reference/docs-conceptual/overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/microsoft-365/admin/setup/setup', 'MicrosoftDocs/microsoft-365-docs', 'microsoft-365/admin/setup/setup.md', 'public'],
-    ['https://learn.microsoft.com/en-us/mem/intune/fundamentals/what-is-intune', 'MicrosoftDocs/memdocs', 'intune/fundamentals/what-is-intune.md', 'main'],
+    ['https://learn.microsoft.com/en-us/mem/intune/fundamentals/what-is-intune', 'merill/intune-docs-mirror', 'intune/fundamentals/what-is-intune.md', 'main'],
     ['https://learn.microsoft.com/en-us/fabric/get-started/microsoft-fabric-overview', 'MicrosoftDocs/fabric-docs', 'docs/fundamentals/microsoft-fabric-overview.md', 'main'],
     ['https://learn.microsoft.com/en-us/dynamics365/get-started/intro-crossapp-index', 'MicrosoftDocs/dynamics365hubpages', 'dynamics365/get-started/intro-crossapp-index.md', 'live'],
     ['https://learn.microsoft.com/en-us/power-apps/powerapps-overview', 'MicrosoftDocs/powerapps-docs', 'powerapps-docs/powerapps-overview.md', 'main'],
@@ -738,6 +744,52 @@ test('a page first recorded by the mirror baseline is shown unchanged, but a pag
     const later = await loadComparison(info, '', null, [{ sha: added, commit: { author: { date: '2026-09-29T08:00:00Z' } } }]);
     assert.equal(later.mirrorBaseline, undefined);
     assert.equal(later.before, '');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('an archived source serves revisions from before mirroring began', async () => {
+  const originalFetch = global.fetch;
+  const head = '7'.repeat(40);
+  const base = '8'.repeat(40);
+  global.fetch = githubStub([
+    ['/repos/merill/intune-docs-mirror/commits/', () => new Response(JSON.stringify({ message: 'No commit found for SHA' }), { status: 422 })],
+    ['/repos/MicrosoftDocs/memdocs/commits?path=', () => new Response(JSON.stringify([{ sha: head, parents: [{ sha: base }] }, { sha: base }]), { status: 200 })],
+    [`/repos/MicrosoftDocs/memdocs/contents/intune/fundamentals/what-is-intune.md?ref=${head}`, () => new Response('# After\n', { status: 200 })],
+    [`/repos/MicrosoftDocs/memdocs/contents/intune/fundamentals/what-is-intune.md?ref=${base}`, () => new Response('# Before\n', { status: 200 })]
+  ]);
+  try {
+    const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/intune/fundamentals/what-is-intune', config.sources);
+    const loaded = await loadRequestedComparison(info, '', { base, head }, [{ sha: '9'.repeat(40) }]);
+    assert.equal(loaded.info.repository, 'MicrosoftDocs/memdocs');
+    assert.equal(loaded.comparison.after, '# After\n');
+    assert.equal(loaded.comparison.before, '# Before\n');
+    assert.equal(loaded.notice, undefined);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('a page unchanged since its mirror baseline shows its last change in the archived original', async () => {
+  const originalFetch = global.fetch;
+  const baseline = 'a1'.repeat(20);
+  const head = 'b2'.repeat(20);
+  const base = 'c3'.repeat(20);
+  global.fetch = githubStub([
+    ['/repos/merill/intune-docs-mirror/contents/', () => new Response('# Page\n', { status: 200 })],
+    ['/repos/MicrosoftDocs/memdocs/commits?path=', () => new Response(JSON.stringify([{ sha: head }, { sha: base }]), { status: 200 })],
+    [`?ref=${head}`, () => new Response('# Page\n', { status: 200 })],
+    [`?ref=${base}`, () => new Response('# Old page\n', { status: 200 })]
+  ]);
+  try {
+    const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/intune/fundamentals/what-is-intune', config.sources);
+    const history = [{ sha: baseline, commit: { author: { date: '2026-09-28T04:01:11Z' } } }];
+    const loaded = await loadRequestedComparison(info, '', null, history);
+    assert.equal(loaded.info.repository, 'MicrosoftDocs/memdocs');
+    assert.equal(loaded.comparison.headCommit.sha, head);
+    assert.match(loaded.notice, /has not changed this page since mirroring began on 2026-09-28/);
+    assert.match(loaded.notice, /last change in MicrosoftDocs\/memdocs before it was archived on 2026-09-02/);
   } finally {
     global.fetch = originalFetch;
   }

@@ -399,6 +399,9 @@
     // are loaded from Learn.
     //
     // mode 'replace': the original is gone, so the mirror is used outright.
+    // mode 'archived': the original is archived, so it no longer changes but
+    // its history is still public. The mirror serves the page; the original
+    // serves revisions from before mirroring began.
     // mode 'fallback': the original is read while it is public. The mirror is
     // used when the original answers 404, or does not know a requested revision
     // (a link recorded from the mirror).
@@ -419,7 +422,8 @@
         repository: 'MicrosoftDocs/memdocs',
         mirrorUrl: 'https://github.com/merill/intune-docs-mirror',
         defaultBranch: 'main',
-        mode: 'fallback',
+        mode: 'archived',
+        archivedOn: '2026-09-02',
         since: '2026-09-28',
         baselineThrough: '2026-09-28T04:08:35Z'
       },

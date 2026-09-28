@@ -362,6 +362,7 @@
       assetsFromLearn: true
     };
     if (mirror.mode === 'replace') return mirrored;
+    if (mirror.mode === 'archived') return { ...mirrored, archive: info, archivedOn: mirror.archivedOn || '' };
     return { ...info, mirror: mirrored };
   }
 
@@ -627,31 +628,60 @@
   }
 
   // Loads a comparison for revisions named in the URL. A revision the original
-  // does not know may have been recorded from its mirror. A mirror cannot serve
-  // revisions from the repository it replaced, so the latest change is shown
-  // instead, with a notice saying why.
+  // does not know may have been recorded from its mirror, and a revision a
+  // mirror does not know may be in the archived original it stands in for.
+  // A mirror cannot serve revisions from a repository that is gone, so the
+  // latest change is shown instead, with a notice saying why.
   async function loadRequestedComparison(info, token, refs, history) {
+    let comparison;
     try {
-      return { info, history, comparison: await loadComparison(info, token, refs, history) };
+      comparison = await loadComparison(info, token, refs, history);
     } catch (error) {
       if (!refs || !isMissingOnGitHub(error)) throw error;
-      if (info.mirror) {
-        const mirrorHistory = await loadHistory(info.mirror, token);
-        try {
-          return { info: info.mirror, history: mirrorHistory, comparison: await loadComparison(info.mirror, token, refs, mirrorHistory) };
-        } catch (mirrorError) {
-          if (!isMissingOnGitHub(mirrorError)) throw mirrorError;
-        }
-      }
-      if (!info.mirroredFrom || !history?.length) throw error;
-      const since = info.mirrorSince ? ` The mirror has recorded changes since ${info.mirrorSince}.` : '';
-      return {
-        info,
-        history,
-        comparison: await loadComparison(info, token, null, history),
-        notice: `The requested revision is from ${info.mirroredFrom}, which is no longer public, so the latest change is shown instead.${since}`
-      };
+      return loadRequestedComparisonElsewhere(info, token, refs, history, error);
     }
+    // A page the mirror has only its baseline of has not changed since
+    // mirroring began; the archived original holds the last change before that.
+    if (!refs && comparison.mirrorBaseline && info.archive) {
+      try {
+        const archiveHistory = await loadHistory(info.archive, token);
+        if (archiveHistory.length) {
+          const archived = await loadComparison(info.archive, token, null, archiveHistory);
+          const archivedOn = info.archivedOn ? ` on ${info.archivedOn}` : '';
+          return {
+            info: info.archive,
+            history: archiveHistory,
+            comparison: archived,
+            notice: `Microsoft Learn has not changed this page since mirroring began${info.mirrorSince ? ` on ${info.mirrorSince}` : ''}. This is its last change in ${info.archive.repository} before it was archived${archivedOn}.`
+          };
+        }
+      } catch (archiveError) {
+        if (!isMissingOnGitHub(archiveError)) throw archiveError;
+      }
+    }
+    return { info, history, comparison };
+  }
+
+  async function loadRequestedComparisonElsewhere(info, token, refs, history, error) {
+    for (const other of [info.archive, info.mirror].filter(Boolean)) {
+      const otherHistory = await loadHistory(other, token);
+      try {
+        return { info: other, history: otherHistory, comparison: await loadComparison(other, token, refs, otherHistory) };
+      } catch (otherError) {
+        if (!isMissingOnGitHub(otherError)) throw otherError;
+      }
+    }
+    if (!info.mirroredFrom || !history?.length) throw error;
+    const reason = info.archive
+      ? `The requested revision was not found in ${info.repository} or ${info.archive.repository}`
+      : `The requested revision is from ${info.mirroredFrom}, which is no longer public`;
+    const since = info.mirrorSince ? ` The mirror has recorded changes since ${info.mirrorSince}.` : '';
+    return {
+      info,
+      history,
+      comparison: await loadComparison(info, token, null, history),
+      notice: `${reason}, so the latest change is shown instead.${since}`
+    };
   }
 
   async function rawRevision(info, token, ref) {
