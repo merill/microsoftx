@@ -33,6 +33,11 @@
     return Array.isArray(supplied) ? supplied : [];
   }
 
+  function configuredMirrors() {
+    const supplied = root.MICROSOFTX_DIFF_CONFIG?.mirrors || nodeConfig?.mirrors;
+    return Array.isArray(supplied) ? supplied : [];
+  }
+
   function unsupportedDocumentationError(message) {
     const error = new Error(message);
     error.code = 'UNSUPPORTED_DOCUMENTATION';
@@ -191,7 +196,7 @@
     return decoded;
   }
 
-  function siteUrlToRepoInfo(value, sourceConfigs = configuredSources()) {
+  function siteUrlToRepoInfo(value, sourceConfigs = configuredSources(), mirrors = configuredMirrors()) {
     let url;
     try { url = new URL(String(value || '').trim()); } catch {
       throw unsupportedDocumentationError('Enter a complete documentation URL, including https://.');
@@ -244,7 +249,7 @@
     const path = [repositoryPathPrefix, `${mappedSegments.join('/')}${fileExtension}`].filter(Boolean).join('/');
     const defaultBranch = source.defaultBranch || 'main';
     const githubRoot = `https://github.com/${owner}/${repo}`;
-    return {
+    return applyMirror({
       sourceId: source.id,
       sourceLabel: source.label,
       siteLabel: source.siteLabel || (site.hostname.toLowerCase() === 'learn.microsoft.com' ? 'Microsoft Learn' : site.hostname),
@@ -260,10 +265,10 @@
       githubRoot,
       githubUrl: `${githubRoot}/blob/${encodeURIComponent(defaultBranch)}/${path}`,
       historyUrl: `${githubRoot}/commits/${encodeURIComponent(defaultBranch)}/${path}`
-    };
+    }, mirrors);
   }
 
-  function microsoftDocsSourceToRepoInfo(publicValue, sourceValue) {
+  function microsoftDocsSourceToRepoInfo(publicValue, sourceValue, mirrors = configuredMirrors()) {
     let publicUrl;
     let sourceUrl;
     try {
@@ -304,7 +309,7 @@
 
     const githubRoot = `https://github.com/${owner}/${repo}`;
     const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-    return {
+    return applyMirror({
       sourceId: 'microsoftdocs-resolved',
       sourceLabel: `${owner}/${repo}`,
       siteLabel: 'Microsoft Learn',
@@ -320,7 +325,50 @@
       githubRoot,
       githubUrl: `${githubRoot}/blob/${encodeURIComponent(defaultBranch)}/${encodedPath}`,
       historyUrl: `${githubRoot}/commits/${encodeURIComponent(defaultBranch)}/${encodedPath}`
+    }, mirrors);
+  }
+
+  // Points a source at its Learn mirror, if it has one (see `mirrors` in
+  // diff-config.js). A 'replace' mirror stands in for the source outright; a
+  // 'fallback' mirror rides along as `info.mirror` for when GitHub cannot serve
+  // the original.
+  function applyMirror(info, mirrors = configuredMirrors()) {
+    const mirror = mirrors.find(entry => String(entry?.repository || '').toLowerCase() === info.repository.toLowerCase());
+    if (!mirror) return info;
+    let mirrorUrl;
+    try { mirrorUrl = new URL(mirror.mirrorUrl); } catch { return info; }
+    const parts = mirrorUrl.pathname.split('/').filter(Boolean);
+    if (mirrorUrl.protocol !== 'https:' || mirrorUrl.hostname.toLowerCase() !== 'github.com' || parts.length !== 2) return info;
+    const [owner, repo] = parts;
+    // The mirror stores every page as Markdown, including Learn's YAML landing pages.
+    const path = info.path.replace(/\.ya?ml$/i, '.md');
+    const defaultBranch = mirror.defaultBranch || 'main';
+    const githubRoot = `https://github.com/${owner}/${repo}`;
+    const mirrored = {
+      ...info,
+      owner,
+      repo,
+      repository: `${owner}/${repo}`,
+      defaultBranch,
+      path,
+      sourceLabel: info.sourceResolution === 'resolved' ? `${owner}/${repo}` : info.sourceLabel,
+      apiRoot: `https://api.github.com/repos/${owner}/${repo}`,
+      githubRoot,
+      githubUrl: `${githubRoot}/blob/${encodeURIComponent(defaultBranch)}/${apiPath(path)}`,
+      historyUrl: `${githubRoot}/commits/${encodeURIComponent(defaultBranch)}/${apiPath(path)}`,
+      mirroredFrom: info.repository,
+      mirrorSince: mirror.since || '',
+      mirrorBaselineThrough: mirror.baselineThrough || '',
+      assetsFromLearn: true
     };
+    if (mirror.mode === 'replace') return mirrored;
+    return { ...info, mirror: mirrored };
+  }
+
+  // GitHub answers 404 for a repository that has gone private and 422 for a
+  // revision it does not have.
+  function isMissingOnGitHub(error) {
+    return error?.status === 404 || error?.status === 422;
   }
 
   async function resolvedMicrosoftDocsSource(value, fetchImpl = root.fetch) {
@@ -366,7 +414,8 @@
     const frontMatter = String(markdown || '').match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
     const title = frontMatter?.[1].match(/^title:\s*["']?(.+?)["']?\s*$/mi);
     const heading = String(markdown || '').match(/^#\s+(.+)$/m);
-    return title?.[1] || heading?.[1] || fallback;
+    // Pages mirrored from Learn carry the site's own title suffix.
+    return String(title?.[1] || heading?.[1] || fallback).replace(/\s*\|\s*Microsoft Learn\s*$/i, '');
   }
 
   function stripFrontMatter(markdown) {
@@ -394,6 +443,8 @@
 
   function markdownForRendering(markdown) {
     return stripFrontMatter(markdown)
+      // Pages mirrored from Learn open with the site's full title as their heading.
+      .replace(/^(#[ \t]+.+?)[ \t]*\|[ \t]*Microsoft Learn[ \t]*$/m, '$1')
       .replace(/:::image\s+([^\n]*?):::/g, (_match, attributes) => {
         const source = attributes.match(/\bsource="([^"]+)"/i)?.[1] || '';
         const alt = attributes.match(/\balt-text="([^"]*)"/i)?.[1] || '';
@@ -420,7 +471,7 @@
     if (candidate.startsWith('/')) {
       try { return new URL(candidate.replace(/\.mdx?(?=($|[?#]))/i, ''), info.siteRoot).href; } catch { return ''; }
     }
-    if (type === 'src') {
+    if (type === 'src' && !info.assetsFromLearn) {
       const directory = info.path.split('/').slice(0, -1).join('/');
       return `https://raw.githubusercontent.com/${info.repository}/${encodeURIComponent(ref)}/${directory}/${candidate}`;
     }
@@ -564,11 +615,62 @@
     return commits;
   }
 
+  // Loads the latest history, moving to the source's fallback mirror when GitHub
+  // cannot serve the original. Returns the info the history came from.
+  async function loadSourceHistory(info, token) {
+    try {
+      return { info, history: await loadHistory(info, token) };
+    } catch (error) {
+      if (!info.mirror || !isMissingOnGitHub(error)) throw error;
+      return { info: info.mirror, history: await loadHistory(info.mirror, token) };
+    }
+  }
+
+  // Loads a comparison for revisions named in the URL. A revision the original
+  // does not know may have been recorded from its mirror. A mirror cannot serve
+  // revisions from the repository it replaced, so the latest change is shown
+  // instead, with a notice saying why.
+  async function loadRequestedComparison(info, token, refs, history) {
+    try {
+      return { info, history, comparison: await loadComparison(info, token, refs, history) };
+    } catch (error) {
+      if (!refs || !isMissingOnGitHub(error)) throw error;
+      if (info.mirror) {
+        const mirrorHistory = await loadHistory(info.mirror, token);
+        try {
+          return { info: info.mirror, history: mirrorHistory, comparison: await loadComparison(info.mirror, token, refs, mirrorHistory) };
+        } catch (mirrorError) {
+          if (!isMissingOnGitHub(mirrorError)) throw mirrorError;
+        }
+      }
+      if (!info.mirroredFrom || !history?.length) throw error;
+      const since = info.mirrorSince ? ` The mirror has recorded changes since ${info.mirrorSince}.` : '';
+      return {
+        info,
+        history,
+        comparison: await loadComparison(info, token, null, history),
+        notice: `The requested revision is from ${info.mirroredFrom}, which is no longer public, so the latest change is shown instead.${since}`
+      };
+    }
+  }
+
   async function rawRevision(info, token, ref) {
     const encodedPath = apiPath(info.path);
     const rawUrl = ref => `${info.apiRoot}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`;
     return request(rawUrl(ref), token, 'application/vnd.github.raw+json')
       .catch(error => error.status === 404 ? '' : Promise.reject(error));
+  }
+
+  // A mirrored page's first commit, when it falls in the mirror's initial crawl,
+  // records the page as it stood when mirroring began. Showing it as an added
+  // page would claim the whole page just changed, so it is shown unchanged.
+  function markMirrorBaseline(comparison) {
+    const { info, headCommit, before, after } = comparison;
+    if (!info.mirroredFrom || !info.mirrorBaselineThrough) return comparison;
+    if (String(before || '').trim() || !String(after || '').trim()) return comparison;
+    const committed = Date.parse(commitDate(headCommit));
+    if (!(committed <= Date.parse(info.mirrorBaselineThrough))) return comparison;
+    return { ...comparison, before: after, mirrorBaseline: true };
   }
 
   async function loadComparison(info, token, refs, suppliedHistory) {
@@ -587,7 +689,7 @@
         rawRevision(info, token, baseRef),
         rawRevision(info, token, refs.head)
       ]);
-      return { info, headCommit, baseCommit, after, before };
+      return markMirrorBaseline({ info, headCommit, baseCommit, after, before });
     }
 
     if (!Array.isArray(history) || !history.length) {
@@ -599,7 +701,7 @@
       rawRevision(info, token, headCommit.sha),
       baseCommit ? rawRevision(info, token, baseCommit.sha) : Promise.resolve('')
     ]);
-    return { info, headCommit, baseCommit, after, before };
+    return markMirrorBaseline({ info, headCommit, baseCommit, after, before });
   }
 
   function setStatus(element, message, state = '') {
@@ -1105,9 +1207,11 @@
       const resultLearn = diffPage.querySelector('[data-result-learn]');
       const resultGithub = diffPage.querySelector('[data-result-github]');
       if (resultTitle) resultTitle.textContent = title;
-      if (resultSource) resultSource.textContent = info.sourceLabel;
+      if (resultSource) resultSource.textContent = info.mirroredFrom ? `${info.sourceLabel} · Learn mirror` : info.sourceLabel;
       if (resultStats) {
-        resultStats.textContent = isNewFile
+        resultStats.textContent = comparison.mirrorBaseline
+          ? `No changes recorded since mirroring began${info.mirrorSince ? ` on ${info.mirrorSince}` : ''}`
+          : isNewFile
           ? `New page · +${counts.additions} lines added`
           : `+${counts.additions} / −${counts.deletions} lines ${comparisonDescription(comparison, currentHistory)}`;
       }
@@ -1232,26 +1336,27 @@
           root.location.assign(diffUrlForLearnUrl(value, root.location.href));
           return;
         }
-        currentInfo = await resolveSiteUrlToRepoInfo(value);
+        const configuredInfo = await resolveSiteUrlToRepoInfo(value);
         setLoadingSurface(diffPage, 'history');
         historyPage = 1;
-        currentHistory = await loadHistory(currentInfo, savedToken());
-        if (!currentHistory.length && currentInfo.sourceResolution !== 'resolved') {
+        ({ info: currentInfo, history: currentHistory } = await loadSourceHistory(configuredInfo, savedToken()));
+        if (!currentHistory.length && configuredInfo.sourceResolution !== 'resolved') {
           const resolvedInfo = await resolveSiteUrlToRepoInfo(value, [], root.fetch);
-          if (resolvedInfo.repository !== currentInfo.repository || resolvedInfo.path !== currentInfo.path || resolvedInfo.defaultBranch !== currentInfo.defaultBranch) {
-            currentInfo = resolvedInfo;
-            currentHistory = await loadHistory(currentInfo, savedToken());
+          if (resolvedInfo.repository !== configuredInfo.repository || resolvedInfo.path !== configuredInfo.path || resolvedInfo.defaultBranch !== configuredInfo.defaultBranch) {
+            ({ info: currentInfo, history: currentHistory } = await loadSourceHistory(resolvedInfo, savedToken()));
           }
         }
         if (!currentHistory.length) {
           throw missingSourceHistoryError(currentInfo.path);
         }
-        historyHasMore = currentHistory.length === HISTORY_PAGE_SIZE;
         setLoadingSurface(diffPage, 'revisions');
-        const comparison = await loadComparison(currentInfo, savedToken(), requestedRefs, currentHistory);
+        const loaded = await loadRequestedComparison(currentInfo, savedToken(), requestedRefs, currentHistory);
+        ({ info: currentInfo, history: currentHistory } = loaded);
+        historyHasMore = currentHistory.length === HISTORY_PAGE_SIZE;
         setLoadingSurface(diffPage, 'rendering');
         await waitForMinimumLoading(loadingStartedAt);
-        renderComparison(comparison);
+        renderComparison(loaded.comparison);
+        if (loaded.notice) setStatus(status, loaded.notice, '');
       } catch (error) {
         if (isMissingSourceHistoryError(error)) {
           showMissingSourcePage(document, error);
@@ -1299,8 +1404,10 @@
     restoreFromUnsupportedHistory,
     showMissingSourcePage,
     historyExplorer,
+    configuredMirrors,
     siteUrlToRepoInfo,
     microsoftDocsSourceToRepoInfo,
+    applyMirror,
     resolveSiteUrlToRepoInfo,
     githubFileUrl,
     extractTitle,
@@ -1316,7 +1423,9 @@
     continuousMarkdownDiffGroups,
     request,
     loadHistory,
+    loadSourceHistory,
     loadComparison,
+    loadRequestedComparison,
     validateComparisonRefs,
     init
   };

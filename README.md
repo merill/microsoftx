@@ -27,11 +27,40 @@ Microsoft Docs X-Ray is an independent community project and is not affiliated w
 - Unknown paths receive the root SPA document, which reconstructs the corresponding `learn.microsoft.com` URL and loads the diff. First-party navigation and assets are root-relative, so no runtime resource depends on `microsoftx.com` being reachable.
 - Other `*.microsoftx.com` hostnames are redirected to the apex by a Cloudflare zone rule.
 - A Cloudflare Pages Function requests Microsoft Learn only to resolve a page's published public GitHub source. It returns the repository, branch, and path and does not receive GitHub history, revisions, diffs, or tokens.
-- The browser contacts `api.github.com` for comparison data. Relative documentation images can load from `raw.githubusercontent.com`.
+- The browser contacts `api.github.com` for comparison data. Relative documentation images can load from `raw.githubusercontent.com`, or from `learn.microsoft.com` for pages read from a Learn mirror.
 - The UserJot feedback widget loads from `cdn.userjot.com` and sends widget requests to `widget.userjot.com` using the public project ID `cmsjwvw5q3wdt0ipd5tpvg5y5`.
 - There is no application server, database, account system, or shared GitHub token.
 
-The reviewed source list in [`src/diff-config.js`](src/diff-config.js) covers Microsoft Defender (including the public `defender-docs` docsets), Microsoft Entra, Azure, Microsoft Graph, .NET, Aspire, PowerShell, Microsoft 365, Intune, Fabric, Dynamics 365, Power Apps, SQL, Visual Studio, ASP.NET Core, and Windows Server. Aspire maps `aspire.dev` MDX pages to `microsoft/aspire.dev`; legacy `/dotnet/aspire/` Learn links remain supported. Microsoft Learn articles backed by other public repositories in the [MicrosoftDocs organization](https://github.com/orgs/MicrosoftDocs/repositories) are resolved from their published source metadata, so they do not require a hard-coded route.
+The reviewed source list in [`src/diff-config.js`](src/diff-config.js) covers Microsoft Defender (read from its Learn mirror, below), Microsoft Entra, Azure, Microsoft Graph, .NET, Aspire, PowerShell, Microsoft 365, Intune, Fabric, Dynamics 365, Power Apps, SQL, Visual Studio, ASP.NET Core, and Windows Server. Aspire maps `aspire.dev` MDX pages to `microsoft/aspire.dev`; legacy `/dotnet/aspire/` Learn links remain supported. Microsoft Learn articles backed by other public repositories in the [MicrosoftDocs organization](https://github.com/orgs/MicrosoftDocs/repositories) are resolved from their published source metadata, so they do not require a hard-coded route.
+
+## Learn mirrors
+
+Microsoft is making some MicrosoftDocs repositories private. `mirrors` in
+[`src/diff-config.js`](src/diff-config.js) maps each such repository to a
+public mirror. [learn-mirror](https://github.com/merill/learn-mirror) rebuilds
+each mirror from Microsoft Learn several times a day, keeping the original
+repository's layout, so a source's path maps to the mirror unchanged.
+
+| Original | Mirror | Mode |
+| --- | --- | --- |
+| `MicrosoftDocs/defender-docs` | [`merill/defender-docs-mirror`](https://github.com/merill/defender-docs-mirror) | `replace` |
+| `MicrosoftDocs/memdocs` | [`merill/intune-docs-mirror`](https://github.com/merill/intune-docs-mirror) | `fallback` |
+| `MicrosoftDocs/entra-docs` | [`merill/entra-docs-mirror`](https://github.com/merill/entra-docs-mirror) | `fallback` |
+
+- **`replace`** uses the mirror outright. The original is gone.
+- **`fallback`** reads the original while it is public, and moves to the mirror
+  in two cases. One is when GitHub answers 404, which is how a repository that
+  has gone private looks. The other is when a requested revision is unknown,
+  which happens with a link recorded from the mirror (the Daily News sites
+  record mirror commits once they are cut over).
+
+A mirror's history starts on the day mirroring began. A `_mx_head` from the
+repository a `replace` mirror stands in for therefore cannot be served. Docs
+X-Ray shows the latest mirrored change instead, with a notice saying why.
+
+Mirrored pages hold the Markdown that Learn publishes, with includes expanded.
+Their relative images load from Learn, not `raw.githubusercontent.com`,
+because a mirror holds no media files.
 
 ## Develop locally
 

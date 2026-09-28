@@ -389,6 +389,48 @@
         defaultBranch: 'main',
         fileExtension: '.md'
       }
+    ],
+
+    // Public mirrors of MicrosoftDocs repositories that are, or are expected to
+    // become, private. Each mirror is rebuilt from Microsoft Learn by
+    // https://github.com/merill/learn-mirror with the original repository's
+    // layout, one commit per crawl that found a change, so a source's path maps
+    // to the mirror unchanged. A mirror holds only Markdown: its pages' images
+    // are loaded from Learn.
+    //
+    // mode 'replace': the original is gone, so the mirror is used outright.
+    // mode 'fallback': the original is read while it is public. The mirror is
+    // used when the original answers 404, or does not know a requested revision
+    // (a link recorded from the mirror).
+    //
+    // baselineThrough: when the mirror's initial crawl was committed. A page's
+    // first commit at or before it is the day mirroring began, not the day the
+    // page was written.
+    mirrors: [
+      {
+        repository: 'MicrosoftDocs/defender-docs',
+        mirrorUrl: 'https://github.com/merill/defender-docs-mirror',
+        defaultBranch: 'main',
+        mode: 'replace',
+        since: '2026-09-28',
+        baselineThrough: '2026-09-28T04:35:52Z'
+      },
+      {
+        repository: 'MicrosoftDocs/memdocs',
+        mirrorUrl: 'https://github.com/merill/intune-docs-mirror',
+        defaultBranch: 'main',
+        mode: 'fallback',
+        since: '2026-09-28',
+        baselineThrough: '2026-09-28T04:08:35Z'
+      },
+      {
+        repository: 'MicrosoftDocs/entra-docs',
+        mirrorUrl: 'https://github.com/merill/entra-docs-mirror',
+        defaultBranch: 'main',
+        mode: 'fallback',
+        since: '2026-09-28',
+        baselineThrough: '2026-09-28T05:00:52Z'
+      }
     ]
   };
 }));

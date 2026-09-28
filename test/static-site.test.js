@@ -413,6 +413,16 @@ test('About, Supported, and Privacy pages contain the promised durable content',
   assert.equal(fs.existsSync(path.join(dist, 'assets/branding/merill-profile.jpeg')), true);
   assert.match(read('supported/index.html'), /MicrosoftDocs\/entra-docs/);
   assert.match(read('supported/index.html'), /MicrosoftDocs\/defender-docs/);
+  {
+    const supported = new JSDOM(read('supported/index.html')).window.document;
+    const defenderRow = supported.querySelector('#microsoft-defender');
+    assert.ok(defenderRow.querySelector('a[href="https://github.com/merill/defender-docs-mirror"]'), 'Defender reads its Learn mirror');
+    assert.match(defenderRow.textContent, /no longer public/);
+    assert.equal(defenderRow.querySelector('code').textContent, 'main');
+    assert.ok(supported.querySelector('#mirrors'));
+    assert.equal(supported.querySelectorAll('#mirrors ~ .table-scroll')[0].querySelectorAll('tbody tr').length, 3);
+  }
+  assert.match(read('privacy/index.html'), /learn\.microsoft\.com<\/code>/);
   assert.match(read('supported/index.html'), /microsoft\/aspire\.dev/);
   assert.match(read('supported/index.html'), /MicrosoftDocs\/powerapps-docs/);
   assert.ok(new JSDOM(read('supported/index.html')).window.document.querySelector('a[href="/?url=https%3A%2F%2Faspire.dev%2Fget-started%2Fwhat-is-aspire%2F"]'));
