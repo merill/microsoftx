@@ -432,7 +432,7 @@ function supportedPage() {
       : mirror.mode === 'replace'
         ? `<a href="${escapeHtml(mirror.mirrorUrl)}">${escapeHtml(mirrorRepo)}</a><br><small>Learn mirror of ${escapeHtml(repo)}, which is no longer public</small>`
         : mirror.mode === 'archived'
-          ? `<a href="${escapeHtml(mirror.mirrorUrl)}">${escapeHtml(mirrorRepo)}</a><br><small>Learn mirror of <a href="${escapeHtml(source.repositoryUrl)}">${escapeHtml(repo)}</a>, archived${mirror.archivedOn ? ` on ${escapeHtml(mirror.archivedOn)}` : ''}</small>`
+          ? `<a href="${escapeHtml(mirror.mirrorUrl)}">${escapeHtml(mirrorRepo)}</a><br><small>Learn mirror of ${escapeHtml(repo)}, archived${mirror.archivedOn ? ` on ${escapeHtml(mirror.archivedOn)}` : ''}. Earlier revisions: <a href="${escapeHtml(mirror.archiveUrl || source.repositoryUrl)}">${escapeHtml(mirror.archiveUrl ? new URL(mirror.archiveUrl).pathname.replace(/^\//, '') : repo)}</a></small>`
           : `<a href="${escapeHtml(source.repositoryUrl)}">${escapeHtml(repo)}</a><br><small>Falls back to <a href="${escapeHtml(mirror.mirrorUrl)}">${escapeHtml(mirrorRepo)}</a></small>`;
     const branch = ['replace', 'archived'].includes(mirror?.mode) ? (mirror.defaultBranch || 'main') : source.defaultBranch;
     return `<tr id="${anchor}"><th scope="row">${escapeHtml(source.label)}</th><td>${repoCell}</td><td><code>${escapeHtml(branch)}</code></td><td><a href="${escapeHtml(exampleHref)}">Try example ↗</a></td></tr>`;
@@ -442,7 +442,7 @@ function supportedPage() {
       const mirrorRepo = new URL(mirror.mirrorUrl).pathname.replace(/^\//, '');
       const used = {
         replace: 'Always — the original is no longer public',
-        archived: `Always — the original was archived${mirror.archivedOn ? ` on ${mirror.archivedOn}` : ''} and serves earlier revisions`,
+        archived: `Always — the original was archived${mirror.archivedOn ? ` on ${mirror.archivedOn}` : ''}; earlier revisions come from ${mirror.archiveUrl ? new URL(mirror.archiveUrl).pathname.replace(/^\//, '') : 'the original'}`,
         fallback: 'When the original is private or lacks the requested revision'
       }[mirror.mode] || '';
       return `<tr><th scope="row"><code>${escapeHtml(mirror.repository)}</code></th><td><a href="${escapeHtml(mirror.mirrorUrl)}">${escapeHtml(mirrorRepo)}</a></td><td>${escapeHtml(used)}</td><td>${escapeHtml(mirror.since || '')}</td></tr>`;

@@ -309,15 +309,15 @@ test('current and legacy Intune routes map to the same source file in the memdoc
   const article = 'fundamentals/role-based-access-control/multi-admin-approval';
   const current = siteUrlToRepoInfo(`https://learn.microsoft.com/en-us/intune/${article}`);
   const legacy = siteUrlToRepoInfo(`https://learn.microsoft.com/en-us/mem/intune/${article}`);
-  // MicrosoftDocs/memdocs is archived: the mirror serves the page, and the
-  // archived original serves the revisions from before mirroring began.
+  // MicrosoftDocs/memdocs is archived: the mirror serves the page, and a fork
+  // of the archived original serves the revisions from before mirroring began.
   assert.deepEqual(
     [current.repository, current.path, current.defaultBranch],
     ['merill/intune-docs-mirror', `intune/${article}.md`, 'main']
   );
   assert.deepEqual(
-    [current.archive.repository, current.archive.path, current.archive.defaultBranch],
-    ['MicrosoftDocs/memdocs', `intune/${article}.md`, 'main']
+    [current.archive.repository, current.archive.path, current.archive.defaultBranch, current.archive.archiveOf],
+    ['merill/memdocs', `intune/${article}.md`, 'main', 'MicrosoftDocs/memdocs']
   );
   assert.deepEqual(
     [legacy.repository, legacy.path, legacy.defaultBranch],
@@ -755,14 +755,14 @@ test('an archived source serves revisions from before mirroring began', async ()
   const base = '8'.repeat(40);
   global.fetch = githubStub([
     ['/repos/merill/intune-docs-mirror/commits/', () => new Response(JSON.stringify({ message: 'No commit found for SHA' }), { status: 422 })],
-    ['/repos/MicrosoftDocs/memdocs/commits?path=', () => new Response(JSON.stringify([{ sha: head, parents: [{ sha: base }] }, { sha: base }]), { status: 200 })],
-    [`/repos/MicrosoftDocs/memdocs/contents/intune/fundamentals/what-is-intune.md?ref=${head}`, () => new Response('# After\n', { status: 200 })],
-    [`/repos/MicrosoftDocs/memdocs/contents/intune/fundamentals/what-is-intune.md?ref=${base}`, () => new Response('# Before\n', { status: 200 })]
+    ['/repos/merill/memdocs/commits?path=', () => new Response(JSON.stringify([{ sha: head, parents: [{ sha: base }] }, { sha: base }]), { status: 200 })],
+    [`/repos/merill/memdocs/contents/intune/fundamentals/what-is-intune.md?ref=${head}`, () => new Response('# After\n', { status: 200 })],
+    [`/repos/merill/memdocs/contents/intune/fundamentals/what-is-intune.md?ref=${base}`, () => new Response('# Before\n', { status: 200 })]
   ]);
   try {
     const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/intune/fundamentals/what-is-intune', config.sources);
     const loaded = await loadRequestedComparison(info, '', { base, head }, [{ sha: '9'.repeat(40) }]);
-    assert.equal(loaded.info.repository, 'MicrosoftDocs/memdocs');
+    assert.equal(loaded.info.repository, 'merill/memdocs');
     assert.equal(loaded.comparison.after, '# After\n');
     assert.equal(loaded.comparison.before, '# Before\n');
     assert.equal(loaded.notice, undefined);
@@ -778,7 +778,7 @@ test('a page unchanged since its mirror baseline shows its last change in the ar
   const base = 'c3'.repeat(20);
   global.fetch = githubStub([
     ['/repos/merill/intune-docs-mirror/contents/', () => new Response('# Page\n', { status: 200 })],
-    ['/repos/MicrosoftDocs/memdocs/commits?path=', () => new Response(JSON.stringify([{ sha: head }, { sha: base }]), { status: 200 })],
+    ['/repos/merill/memdocs/commits?path=', () => new Response(JSON.stringify([{ sha: head }, { sha: base }]), { status: 200 })],
     [`?ref=${head}`, () => new Response('# Page\n', { status: 200 })],
     [`?ref=${base}`, () => new Response('# Old page\n', { status: 200 })]
   ]);
@@ -786,7 +786,7 @@ test('a page unchanged since its mirror baseline shows its last change in the ar
     const info = siteUrlToRepoInfo('https://learn.microsoft.com/en-us/intune/fundamentals/what-is-intune', config.sources);
     const history = [{ sha: baseline, commit: { author: { date: '2026-09-28T04:01:11Z' } } }];
     const loaded = await loadRequestedComparison(info, '', null, history);
-    assert.equal(loaded.info.repository, 'MicrosoftDocs/memdocs');
+    assert.equal(loaded.info.repository, 'merill/memdocs');
     assert.equal(loaded.comparison.headCommit.sha, head);
     assert.match(loaded.notice, /has not changed this page since mirroring began on 2026-09-28/);
     assert.match(loaded.notice, /last change in MicrosoftDocs\/memdocs before it was archived on 2026-09-02/);
